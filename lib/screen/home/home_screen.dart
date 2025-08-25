@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'widgets/av_tour_card.dart';
-
+// --------- ViewModels ---------
 class _TourVM {
   final String id, title, cover;
   final int stops, durationMin;
@@ -21,6 +19,20 @@ class _TourVM {
   String get subtitle => '$durationMin min · $stops stops';
 }
 
+class _StatsVM {
+  final int completedTours;
+  final int rewardStars0to9; // 0..9 (el 10º es gratis)
+  final double walkedKm;
+  const _StatsVM({
+    required this.completedTours,
+    required this.rewardStars0to9,
+    required this.walkedKm,
+  });
+  factory _StatsVM.zero() =>
+      const _StatsVM(completedTours: 0, rewardStars0to9: 0, walkedKm: 0.0);
+}
+
+// --------- Screen ---------
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
@@ -32,12 +44,14 @@ class _HomeScreenState extends State<HomeScreen> {
   final _heroCtrl = PageController(viewportFraction: 0.92);
   final _heroIndex = ValueNotifier(0);
 
-  late Future<List<_TourVM>> _future;
+  late Future<List<_TourVM>> _toursFuture;
+  late Future<_StatsVM> _statsFuture;
 
   @override
   void initState() {
     super.initState();
-    _future = _load(); // <- devuelve Future<List<_TourVM>>
+    _toursFuture = _loadTours();
+    _statsFuture = _loadStats(); // ← usa la vista user_stats_v
   }
 
   @override
@@ -47,7 +61,8 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  Future<List<_TourVM>> _load() async {
+  // ---- Tours para el hero ----
+  Future<List<_TourVM>> _loadTours() async {
     final rows = await _sb
         .from('tours_view_public')
         .select()
@@ -68,88 +83,59 @@ class _HomeScreenState extends State<HomeScreen> {
         .toList();
   }
 
+  // ---- ✅ Stats desde la vista user_stats_v (opción A) ----
+  Future<_StatsVM> _loadStats() async {
+    final userId = _sb.auth.currentUser?.id;
+    if (userId == null) return _StatsVM.zero();
+
+    try {
+      final row = await _sb
+          .from('user_stats_v')
+          .select()
+          .eq('user_id', userId)
+          .maybeSingle(); // Map<String, dynamic>? o null
+
+      if (row == null) return _StatsVM.zero();
+
+      return _StatsVM(
+        completedTours: (row['completed_tours'] as num?)?.toInt() ?? 0,
+        rewardStars0to9: (row['reward_stars'] as num?)?.toInt() ?? 0,
+        walkedKm: (row['walked_km'] as num?)?.toDouble() ?? 0.0,
+      );
+    } on PostgrestException catch (e) {
+      debugPrint('⚠️ user_stats_v query failed: ${e.message}');
+      return _StatsVM.zero();
+    } catch (e) {
+      debugPrint('⚠️ unexpected stats error: $e');
+      return _StatsVM.zero();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return CustomScrollView(
       slivers: [
+        // AppBar
         SliverAppBar(
           floating: true,
           snap: true,
           automaticallyImplyLeading: false,
-          toolbarHeight: 72,
+          pinned: false, // ponlo en true si quieres fijarlo al scroll
+          toolbarHeight: 64,
           titleSpacing: 20,
-          title: Row(
-            children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: theme.colorScheme.primary,
-                child: const Icon(Icons.travel_explore, color: Colors.white),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Welcome to Avanti',
-                        style: theme.textTheme.labelLarge
-                            ?.copyWith(color: theme.colorScheme.primary)),
-                    Text('Discover Paris at your pace',
-                        style: theme.textTheme.titleLarge
-                            ?.copyWith(fontWeight: FontWeight.w800)),
-                  ],
-                ),
-              ),
-              IconButton(
-                onPressed: () {},
-                icon: const Icon(Icons.notifications_none_rounded),
-              ),
-            ],
+          title: Text(
+            'Recommended',
+            style: Theme.of(context)
+                .textTheme
+                .titleLarge
+                ?.copyWith(fontWeight: FontWeight.w800),
           ),
         ),
 
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  decoration: const InputDecoration(
-                    hintText: 'Search tours, neighborhoods, monuments…',
-                    prefixIcon: Icon(Icons.search_rounded),
-                  ),
-                  onChanged: (q) {
-                    // hook up later
-                  },
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 40,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: [
-                      _chip(context, 'Popular', selected: true),
-                      _chip(context, 'History'),
-                      _chip(context, 'Art'),
-                      _chip(context, 'Food'),
-                      _chip(context, 'Romantic'),
-                      _chip(context, 'Family'),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 18),
-              ],
-            ),
-          ),
-        ),
-
-        // HERO + indicador
+        // HERO: recomendado
         SliverToBoxAdapter(
           child: FutureBuilder<List<_TourVM>>(
-            future: _future,
+            future: _toursFuture,
             builder: (context, snap) {
               if (snap.connectionState != ConnectionState.done) {
                 return const Padding(
@@ -171,13 +157,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               }
 
+              // Altura responsiva del slideshow
+              final w = MediaQuery.of(context).size.width;
+              final h = (w * 0.58).clamp(220.0, 360.0).toDouble();
+
               final heroCount = tours.length.clamp(0, 5);
               return Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
                   children: [
                     SizedBox(
-                      height: 210,
+                      height: h,
                       child: PageView.builder(
                         controller: _heroCtrl,
                         itemCount: heroCount,
@@ -201,20 +191,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     const SizedBox(height: 22),
-                    Row(
-                      children: [
-                        Text('All tours',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(fontWeight: FontWeight.w800)),
-                        const Spacer(),
-                        TextButton(
-                          onPressed: () => context.go('/catalog'),
-                          child: const Text('See more'),
-                        ),
-                      ],
-                    ),
                   ],
                 ),
               );
@@ -222,53 +198,48 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        // GRID
-        FutureBuilder<List<_TourVM>>(
-          future: _future,
-          builder: (context, snap) {
-            final tours = snap.data ?? <_TourVM>[];
-            return SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 14,
-                  crossAxisSpacing: 14,
-                  childAspectRatio: 0.82,
+        // MY STATS
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+            child: Column(
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'My Stats',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
                 ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    if (index >= tours.length) return const SizedBox.shrink();
-                    final t = tours[index];
-                    return AvTourCard(
-                      title: t.title,
-                      subtitle: t.subtitle,
-                      imageUrl: t.cover,
-                      rating: t.rating,
-                      onTap: () => context.push('/tour/${t.id}'),
-                    );
+                const SizedBox(height: 12),
+                FutureBuilder<_StatsVM>(
+                  future: _statsFuture,
+                  builder: (context, snap) {
+                    if (snap.connectionState != ConnectionState.done) {
+                      return const SizedBox(
+                        height: 160,
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+                    if (snap.hasError) {
+                      return Text('Error loading stats: ${snap.error}');
+                    }
+                    final s = snap.data ?? _StatsVM.zero();
+                    return _StatsGrid(stats: s);
                   },
-                  childCount: tours.length,
                 ),
-              ),
-            );
-          },
+              ],
+            ),
+          ),
         ),
       ],
     );
   }
 
-  Widget _chip(BuildContext context, String label, {bool selected = false}) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: FilterChip(
-        label: Text(label),
-        selected: selected,
-        onSelected: (_) {},
-      ),
-    );
-  }
-
+  // ---------- helpers visuales ----------
   Widget _emptyHero(BuildContext context) {
     return Container(
       height: 220,
@@ -330,9 +301,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         Text(
                           t.rating.toStringAsFixed(1),
                           style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                          ),
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800),
                         ),
                       ],
                     ),
@@ -353,8 +323,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     t.subtitle,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: Colors.white.withValues(alpha: 0.90),
-                      fontWeight: FontWeight.w600,
-                    ),
+                      fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -362,6 +331,136 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// --------- Widgets de Stats ----------
+class _StatsGrid extends StatelessWidget {
+  final _StatsVM stats;
+  const _StatsGrid({required this.stats});
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 1.2,
+      ),
+      children: [
+        _StatCard(
+          title: 'Completed Tours',
+          child: _BigValue('${stats.completedTours}'),
+        ),
+        _StatCard(
+          title: 'Avanti Rewards',
+          child: _StarsGrid(count: stats.rewardStars0to9),
+        ),
+        _StatCard(
+          title: 'Walked Distance',
+          child: _BigValue('${stats.walkedKm.toStringAsFixed(1)} km'),
+        ),
+        const _StatCard(title: 'Coming Soon', child: _BigValue('—')),
+      ],
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String title;
+  final Widget child;
+  const _StatCard({required this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 6),
+          )
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 6),
+          Expanded(child: Center(child: child)),
+        ],
+      ),
+    );
+  }
+}
+
+class _BigValue extends StatelessWidget {
+  final String value;
+  const _BigValue(this.value);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      value,
+      textAlign: TextAlign.center,
+      style: Theme.of(context)
+          .textTheme
+          .headlineSmall
+          ?.copyWith(fontWeight: FontWeight.w800),
+    );
+  }
+}
+
+// 5 estrellas arriba + 4 abajo, centradas
+class _StarsGrid extends StatelessWidget {
+  final int count; // 0..9
+  const _StarsGrid({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    const int topTotal = 5;
+    const int bottomTotal = 4;
+    final int active = count.clamp(0, topTotal + bottomTotal);
+    final int activeTop = active.clamp(0, topTotal);
+    final int activeBottom = (active - topTotal).clamp(0, bottomTotal);
+
+    Widget buildRow(int total, int active) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: List.generate(total, (i) {
+          final filled = i < active;
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Icon(
+              filled ? Icons.star_rounded : Icons.star_outline_rounded,
+              size: 22,
+              color: filled ? Colors.amber : Colors.grey.withValues(alpha: 0.5),
+            ),
+          );
+        }),
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        buildRow(topTotal, activeTop),
+        const SizedBox(height: 6),
+        buildRow(bottomTotal, activeBottom),
+      ],
     );
   }
 }
