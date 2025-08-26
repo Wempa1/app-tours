@@ -42,9 +42,9 @@ class TourDetailModel {
 String _durationText(Duration d) {
   final h = d.inHours;
   final m = d.inMinutes % 60;
-  if (h > 0 && m > 0) return '$h h $m min';
+  if (h > 0 && m > 0) return '$h h $m m';
   if (h > 0) return '$h h';
-  return '$m min';
+  return '$m m';
 }
 
 /// ===== Pantalla =============================================================
@@ -198,7 +198,6 @@ class TourDetailScreen extends StatelessWidget {
           height: 54,
           child: ElevatedButton.icon(
             onPressed: () {
-              // NOTE: Navegar al mapa / guía paso a paso cuando exista la ruta
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Guide mode coming soon')),
               );
@@ -221,53 +220,55 @@ class _StatsBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // Construimos children manualmente para intercalar separadores sin romper Expanded
     final children = <Widget>[];
     for (var i = 0; i < items.length; i++) {
       final item = items[i];
       children.add(
         Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: theme.brightness == Brightness.dark
-                  ? const Color(0xFF0F172A)
-                  : Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
+          child: SizedBox(
+            height: 76, // ✅ misma altura para las 3 tarjetas
+            child: Container(
+              decoration: BoxDecoration(
                 color: theme.brightness == Brightness.dark
-                    ? const Color(0xFF1F2937)
-                    : const Color(0xFFE2E8F0),
-              ),
-            ),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(item.icon, size: 18, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        item.value,
-                        style: theme.textTheme.labelLarge
-                            ?.copyWith(fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        item.label,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.textTheme.bodySmall?.color
-                              ?.withValues(alpha: 0.7),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ? const Color(0xFF0F172A)
+                    : Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: theme.brightness == Brightness.dark
+                      ? const Color(0xFF1F2937)
+                      : const Color(0xFFE2E8F0),
                 ),
-              ],
+              ),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(item.icon, size: 18, color: theme.colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          item.value,
+                          style: theme.textTheme.labelLarge
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          item.label,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.textTheme.bodySmall?.color
+                                ?.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -338,7 +339,7 @@ class _StopTile extends StatelessWidget {
         ),
         alignment: Alignment.center,
         child: Text(
-          '${stop.order}',
+          '${stop.order}', // braces ok aquí (expresión), pero puedes usar '${
           style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
         ),
       ),
@@ -349,46 +350,8 @@ class _StopTile extends StatelessWidget {
       subtitle: stop.subtitle != null ? Text(stop.subtitle!) : null,
       trailing: const Icon(Icons.chevron_right_rounded),
       onTap: () {
-        // NOTE: cuando exista StopDetailScreen, navega aquí
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Stop ${stop.order}: coming soon')),
-        );
+        // Navegar al detalle de la parada (cuando exista)
       },
     );
-  }
-}
-
-/// ===== Mock rápido para probar (elimina en prod) ============================
-class DebugTourDetailPreview extends StatelessWidget {
-  const DebugTourDetailPreview({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final model = TourDetailModel(
-      id: 'ile-cite',
-      name: 'Île de la Cité – Paris Essential',
-      logoUrl:
-          'https://images.unsplash.com/photo-1520974735194-6c0aeb979c1d?w=256',
-      coverUrl:
-          'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=1600',
-      stopCount: 9,
-      duration: const Duration(hours: 2),
-      lengthKm: 4.6,
-      stops: const [
-        TourStop(order: 1, title: 'Notre-Dame de Paris', subtitle: 'Start · 0 m'),
-        TourStop(order: 2, title: 'Pont Neuf', subtitle: '450 m · 6 min'),
-        TourStop(order: 3, title: 'Sainte-Chapelle', subtitle: '300 m · 4 min'),
-        TourStop(order: 4, title: 'Conciergerie'),
-        TourStop(order: 5, title: 'Bouquinistes of the Seine'),
-        TourStop(order: 6, title: 'Place Dauphine'),
-        TourStop(order: 7, title: 'Pont des Arts'),
-        TourStop(order: 8, title: 'Quai de l’Horloge'),
-        TourStop(order: 9, title: 'Finish – Île de la Cité'),
-      ],
-      description:
-          'Explore the historic heart of Paris at your own pace. Includes audio guide, offline maps, and local tips for each stop.',
-    );
-
-    return TourDetailScreen(tour: model);
   }
 }
