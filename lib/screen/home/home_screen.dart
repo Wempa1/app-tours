@@ -1,7 +1,10 @@
+// lib/screen/home/home_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/location_service.dart';
 
 /// --------- ViewModels ---------
 class _TourVM {
@@ -34,13 +37,13 @@ class _StatsVM {
 }
 
 /// --------- Screen ---------
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _sb = Supabase.instance.client;
   final _heroCtrl = PageController(viewportFraction: 0.92);
   final _heroIndex = ValueNotifier(0);
@@ -51,8 +54,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _toursFuture = _loadTours();
-    _statsFuture = _loadStats(); // ← usa la vista user_stats_v
+    _toursFuture = _loadToursNearbyOrDefault();
+    _statsFuture = _loadStats();
   }
 
   @override
@@ -62,29 +65,55 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // ---- Tours para el hero ----
-  Future<List<_TourVM>> _loadTours() async {
-    final rows = await _sb
-        .from('tours_view_public')
-        .select()
-        .order('priority', ascending: true)
-        .limit(12);
+  // ---- Tours cercanos (RPC) con fallback a vista pública ----
+  Future<List<_TourVM>> _loadToursNearbyOrDefault() async {
+  // 1) Intentar ubicación del usuario
+  final loc = ref.read(locationServiceProvider);
+  final pos = await loc.currentPositionOrNull();
+
+  // 2) Si hay ubicación → usar función tours_nearby(p_lat, p_lon, p_limit)
+  if (pos != null) {
+    final rows = await _sb.rpc('tours_nearby', params: {
+      'p_lat': pos.latitude,
+      'p_lon': pos.longitude,
+      'p_limit': 12,
+    });
 
     final list = List<Map<String, dynamic>>.from(rows as List? ?? const []);
-    return list
-        .map((m) => _TourVM(
-              id: (m['id'] ?? '') as String,
-              title: (m['title'] ?? '') as String,
-              cover: (m['cover_url'] ?? '') as String,
-              stops: (m['stops_count'] as num?)?.toInt() ?? 0,
-              durationMin: (m['duration_minutes'] as num?)?.toInt() ?? 0,
-              lengthKm: (m['distance_km'] as num?)?.toDouble() ?? 0.0,
-              rating: 4.8, // placeholder hasta tener reviews
-            ))
-        .toList();
+    if (list.isNotEmpty) {
+      return list.map((m) => _TourVM(
+        id: (m['id'] ?? '').toString(),
+        title: (m['title'] ?? '').toString(),
+        cover: (m['cover_url'] ?? '').toString(),
+        stops: (m['stops_count'] as num?)?.toInt() ?? 0,
+        durationMin: (m['duration_minutes'] as num?)?.toInt() ?? 0,
+        lengthKm: (m['distance_km'] as num?)?.toDouble()
+                  ?? (m['distance_km'] as int?)?.toDouble() ?? 0.0,
+        rating: 4.8, // placeholder
+      )).toList();
+    }
   }
 
-  // ---- ✅ Stats desde la vista user_stats_v (opción A) ----
+  // 3) Fallback → vista pública (ordenar por un campo que exista)
+  final rows = await _sb
+      .from('tours_view_public')
+      .select()
+      .order('title', ascending: true)   // <- antes era 'priority'
+      .limit(12);
+
+  final list = List<Map<String, dynamic>>.from(rows as List? ?? const []);
+  return list.map((m) => _TourVM(
+    id: (m['id'] ?? '').toString(),
+    title: (m['title'] ?? '').toString(),
+    cover: (m['cover_url'] ?? '').toString(),
+    stops: (m['stops_count'] as num?)?.toInt() ?? 0,
+    durationMin: (m['duration_minutes'] as num?)?.toInt() ?? 0,
+    lengthKm: (m['distance_km'] as num?)?.toDouble() ?? 0.0,
+    rating: 4.8,
+  )).toList();
+}
+
+  // ---- Stats desde la vista user_stats_v ----
   Future<_StatsVM> _loadStats() async {
     final userId = _sb.auth.currentUser?.id;
     if (userId == null) return _StatsVM.zero();
@@ -94,7 +123,7 @@ class _HomeScreenState extends State<HomeScreen> {
           .from('user_stats_v')
           .select()
           .eq('user_id', userId)
-          .maybeSingle(); // Map<String, dynamic>? o null
+          .maybeSingle();
 
       if (row == null) return _StatsVM.zero();
 
@@ -122,7 +151,7 @@ class _HomeScreenState extends State<HomeScreen> {
             floating: true,
             snap: true,
             automaticallyImplyLeading: false,
-            pinned: false, // ponlo en true si quieres fijarlo al scroll
+            pinned: false,
             toolbarHeight: 64,
             titleSpacing: 20,
             title: Text(
@@ -264,7 +293,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: InkWell(
           borderRadius: BorderRadius.circular(24),
           onTap: () {
-            // GoRouter: vamos al detalle que hace fetch por id
+            // GoRouter: detalle por id (ya tienes la ruta /tour/:id)
             context.push('/tour/${t.id}');
           },
           child: ClipRRect(
@@ -297,10 +326,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       const Spacer(),
                       Container(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withValues(alpha: 0.90),
+                          color: theme.colorScheme.primary
+                              .withValues(alpha: 0.90),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
@@ -410,7 +440,8 @@ class _StatCard extends StatelessWidget {
         children: [
           Text(
             title,
-            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            style:
+                theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),
@@ -430,8 +461,10 @@ class _BigValue extends StatelessWidget {
     return Text(
       value,
       textAlign: TextAlign.center,
-      style:
-          Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+      style: Theme.of(context)
+          .textTheme
+          .headlineSmall
+          ?.copyWith(fontWeight: FontWeight.w800),
     );
   }
 }
