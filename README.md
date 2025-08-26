@@ -44,9 +44,6 @@ La app usa un archivo **`.env`** en la raíz (no se versiona).
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 
-# Opcionales
-SENTRY_DSN=
-FEATURE_FLAGS=
 ```
 
 **No** subas valores reales. Cada dev debe copiar:
