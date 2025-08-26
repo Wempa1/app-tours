@@ -49,6 +49,7 @@ SENTRY_DSN=
 FEATURE_FLAGS=
 ```
 
+
 **No** subas valores reales. Cada dev debe copiar:
 
 ```bash
