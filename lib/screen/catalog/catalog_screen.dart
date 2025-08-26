@@ -23,7 +23,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
     final rows = await _sb
         .from('tours_view_public')
         .select()
-        .order('priority', ascending: true);
+        .order('title', ascending: true);
     // 'rows' ya es List<dynamic>; lo normalizamos de forma segura:
     return List<Map<String, dynamic>>.from(rows as List? ?? const []);
   }

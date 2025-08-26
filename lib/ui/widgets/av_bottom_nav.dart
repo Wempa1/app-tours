@@ -1,42 +1,62 @@
+// lib/ui/widgets/av_bottom_nav.dart
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
-class AvBottomNav extends StatelessWidget {
-  final Widget child; // el contenido de la ruta activa
-  const AvBottomNav({super.key, required this.child});
+// Páginas de cada pestaña
+import '../../screen/home/home_screen.dart';
+import '../../screen/catalog/catalog_screen.dart';
+import '../../screen/map/map_screen.dart';
+import '../../screen/menu/menu_screen.dart';
 
-  static const _tabs = [
-    ('/',        Icons.home_outlined,   Icons.home_rounded,   'Home'),
-    ('/catalog', Icons.list_alt_outlined, Icons.list_alt,     'Catalog'),
-    ('/map',     Icons.map_outlined,    Icons.map,            'Map'),
-    ('/menu', Icons.menu_outlined,  Icons.menu_rounded,    'Menu'),
+class AvBottomNav extends StatefulWidget {
+  const AvBottomNav({super.key});
+
+  @override
+  State<AvBottomNav> createState() => _AvBottomNavState();
+}
+
+class _AvBottomNavState extends State<AvBottomNav> {
+  int _index = 0;
+
+  final _screens = const <Widget>[
+    HomeScreen(),
+    CatalogScreen(),
+    MapScreen(),
+    MenuScreen(),
   ];
-
-  int _indexForLocation(String loc) {
-    for (var i = 0; i < _tabs.length; i++) {
-      final base = _tabs[i].$1;
-      if (loc == base || loc.startsWith('$base/')) return i;
-    }
-    return 0;
-  }
 
   @override
   Widget build(BuildContext context) {
-    final loc = GoRouterState.of(context).uri.toString();
-    final current = _indexForLocation(loc);
-
     return Scaffold(
-      body: child,
+      body: SafeArea(
+        child: IndexedStack(
+          index: _index,
+          children: _screens,
+        ),
+      ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: current,
-        onDestinationSelected: (i) => context.go(_tabs[i].$1),
-        destinations: [
-          for (final t in _tabs)
-            NavigationDestination(
-              icon: Icon(t.$2),
-              selectedIcon: Icon(t.$3),
-              label: t.$4,
-            ),
+        selectedIndex: _index,
+        onDestinationSelected: (i) => setState(() => _index = i),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.list_alt_outlined),
+            selectedIcon: Icon(Icons.list_alt),
+            label: 'Catalog',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.map_outlined),
+            selectedIcon: Icon(Icons.map),
+            label: 'Map',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.menu),
+            selectedIcon: Icon(Icons.menu_open),
+            label: 'Menu',
+          ),
         ],
       ),
     );

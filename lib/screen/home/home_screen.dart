@@ -67,56 +67,51 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   // ---- Tours cercanos (RPC) con fallback a vista pública ----
   Future<List<_TourVM>> _loadToursNearbyOrDefault() async {
-    // 1) Intentar ubicación del usuario
-    final loc = ref.read(locationServiceProvider);
-    final pos = await loc.currentPositionOrNull();
+  // 1) Intentar ubicación del usuario
+  final loc = ref.read(locationServiceProvider);
+  final pos = await loc.currentPositionOrNull();
 
-    // 2) Si hay ubicación → usar función tours_nearby(lat, lon, limit_n)
-    if (pos != null) {
-      final rows = await _sb.rpc('tours_nearby', params: {
-        'user_lat': pos.latitude,
-        'user_lon': pos.longitude,
-        'limit_n': 12,
-      });
-
-      final list = List<Map<String, dynamic>>.from(rows as List? ?? const []);
-      if (list.isNotEmpty) {
-        return list
-            .map((m) => _TourVM(
-                  id: (m['id'] ?? '').toString(),
-                  title: (m['title'] ?? '').toString(),
-                  cover: (m['cover_url'] ?? '').toString(),
-                  stops: (m['stops_count'] as num?)?.toInt() ?? 0,
-                  durationMin: (m['duration_minutes'] as num?)?.toInt() ?? 0,
-                  lengthKm: (m['distance_km'] as num?)?.toDouble() ??
-                      (m['distance_km'] as int?)?.toDouble() ??
-                      0.0,
-                  rating: 4.8, // placeholder
-                ))
-            .toList();
-      }
-    }
-
-    // 3) Fallback → vista pública por prioridad
-    final rows = await _sb
-        .from('tours_view_public')
-        .select()
-        .order('priority', ascending: true)
-        .limit(12);
+  // 2) Si hay ubicación → usar función tours_nearby(p_lat, p_lon, p_limit)
+  if (pos != null) {
+    final rows = await _sb.rpc('tours_nearby', params: {
+      'p_lat': pos.latitude,
+      'p_lon': pos.longitude,
+      'p_limit': 12,
+    });
 
     final list = List<Map<String, dynamic>>.from(rows as List? ?? const []);
-    return list
-        .map((m) => _TourVM(
-              id: (m['id'] ?? '').toString(),
-              title: (m['title'] ?? '').toString(),
-              cover: (m['cover_url'] ?? '').toString(),
-              stops: (m['stops_count'] as num?)?.toInt() ?? 0,
-              durationMin: (m['duration_minutes'] as num?)?.toInt() ?? 0,
-              lengthKm: (m['distance_km'] as num?)?.toDouble() ?? 0.0,
-              rating: 4.8,
-            ))
-        .toList();
+    if (list.isNotEmpty) {
+      return list.map((m) => _TourVM(
+        id: (m['id'] ?? '').toString(),
+        title: (m['title'] ?? '').toString(),
+        cover: (m['cover_url'] ?? '').toString(),
+        stops: (m['stops_count'] as num?)?.toInt() ?? 0,
+        durationMin: (m['duration_minutes'] as num?)?.toInt() ?? 0,
+        lengthKm: (m['distance_km'] as num?)?.toDouble()
+                  ?? (m['distance_km'] as int?)?.toDouble() ?? 0.0,
+        rating: 4.8, // placeholder
+      )).toList();
+    }
   }
+
+  // 3) Fallback → vista pública (ordenar por un campo que exista)
+  final rows = await _sb
+      .from('tours_view_public')
+      .select()
+      .order('title', ascending: true)   // <- antes era 'priority'
+      .limit(12);
+
+  final list = List<Map<String, dynamic>>.from(rows as List? ?? const []);
+  return list.map((m) => _TourVM(
+    id: (m['id'] ?? '').toString(),
+    title: (m['title'] ?? '').toString(),
+    cover: (m['cover_url'] ?? '').toString(),
+    stops: (m['stops_count'] as num?)?.toInt() ?? 0,
+    durationMin: (m['duration_minutes'] as num?)?.toInt() ?? 0,
+    lengthKm: (m['distance_km'] as num?)?.toDouble() ?? 0.0,
+    rating: 4.8,
+  )).toList();
+}
 
   // ---- Stats desde la vista user_stats_v ----
   Future<_StatsVM> _loadStats() async {
