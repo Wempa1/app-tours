@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// --------- ViewModels ---------
+/// --------- ViewModels ---------
 class _TourVM {
   final String id, title, cover;
   final int stops, durationMin;
@@ -32,7 +33,7 @@ class _StatsVM {
       const _StatsVM(completedTours: 0, rewardStars0to9: 0, walkedKm: 0.0);
 }
 
-// --------- Screen ---------
+/// --------- Screen ---------
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
@@ -113,129 +114,131 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
-      slivers: [
-        // AppBar
-        SliverAppBar(
-          floating: true,
-          snap: true,
-          automaticallyImplyLeading: false,
-          pinned: false, // ponlo en true si quieres fijarlo al scroll
-          toolbarHeight: 64,
-          titleSpacing: 20,
-          title: Text(
-            'Recommended',
-            style: Theme.of(context)
-                .textTheme
-                .titleLarge
-                ?.copyWith(fontWeight: FontWeight.w800),
-          ),
-        ),
-
-        // HERO: recomendado
-        SliverToBoxAdapter(
-          child: FutureBuilder<List<_TourVM>>(
-            future: _toursFuture,
-            builder: (context, snap) {
-              if (snap.connectionState != ConnectionState.done) {
-                return const Padding(
-                  padding: EdgeInsets.only(top: 80),
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
-              if (snap.hasError) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text('Error: ${snap.error}'),
-                );
-              }
-              final tours = snap.data ?? <_TourVM>[];
-              if (tours.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: _emptyHero(context),
-                );
-              }
-
-              // Altura responsiva del slideshow
-              final w = MediaQuery.of(context).size.width;
-              final h = (w * 0.58).clamp(220.0, 360.0).toDouble();
-
-              final heroCount = tours.length.clamp(0, 5);
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  children: [
-                    SizedBox(
-                      height: h,
-                      child: PageView.builder(
-                        controller: _heroCtrl,
-                        itemCount: heroCount,
-                        onPageChanged: (i) => _heroIndex.value = i,
-                        itemBuilder: (_, i) => _heroCard(context, tours[i]),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    ValueListenableBuilder<int>(
-                      valueListenable: _heroIndex,
-                      builder: (_, i, __) => SmoothPageIndicator(
-                        controller: _heroCtrl,
-                        count: heroCount,
-                        effect: ExpandingDotsEffect(
-                          dotHeight: 6,
-                          dotWidth: 6,
-                          spacing: 6,
-                          activeDotColor:
-                              Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-
-        // MY STATS
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-            child: Column(
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'My Stats',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleLarge
-                        ?.copyWith(fontWeight: FontWeight.w800),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                FutureBuilder<_StatsVM>(
-                  future: _statsFuture,
-                  builder: (context, snap) {
-                    if (snap.connectionState != ConnectionState.done) {
-                      return const SizedBox(
-                        height: 160,
-                        child: Center(child: CircularProgressIndicator()),
-                      );
-                    }
-                    if (snap.hasError) {
-                      return Text('Error loading stats: ${snap.error}');
-                    }
-                    final s = snap.data ?? _StatsVM.zero();
-                    return _StatsGrid(stats: s);
-                  },
-                ),
-              ],
+    return Scaffold(
+      body: CustomScrollView(
+        slivers: [
+          // AppBar
+          SliverAppBar(
+            floating: true,
+            snap: true,
+            automaticallyImplyLeading: false,
+            pinned: false, // ponlo en true si quieres fijarlo al scroll
+            toolbarHeight: 64,
+            titleSpacing: 20,
+            title: Text(
+              'Recommended',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w800),
             ),
           ),
-        ),
-      ],
+
+          // HERO: recomendado
+          SliverToBoxAdapter(
+            child: FutureBuilder<List<_TourVM>>(
+              future: _toursFuture,
+              builder: (context, snap) {
+                if (snap.connectionState != ConnectionState.done) {
+                  return const Padding(
+                    padding: EdgeInsets.only(top: 80),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                if (snap.hasError) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Text('Error: ${snap.error}'),
+                  );
+                }
+                final tours = snap.data ?? <_TourVM>[];
+                if (tours.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _emptyHero(context),
+                  );
+                }
+
+                // Altura responsiva del slideshow
+                final w = MediaQuery.of(context).size.width;
+                final h = (w * 0.58).clamp(220.0, 360.0).toDouble();
+
+                final int heroCount = tours.length.clamp(0, 5);
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    children: [
+                      SizedBox(
+                        height: h,
+                        child: PageView.builder(
+                          controller: _heroCtrl,
+                          itemCount: heroCount,
+                          onPageChanged: (i) => _heroIndex.value = i,
+                          itemBuilder: (_, i) => _heroCard(context, tours[i]),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      ValueListenableBuilder<int>(
+                        valueListenable: _heroIndex,
+                        builder: (_, i, __) => SmoothPageIndicator(
+                          controller: _heroCtrl,
+                          count: heroCount,
+                          effect: ExpandingDotsEffect(
+                            dotHeight: 6,
+                            dotWidth: 6,
+                            spacing: 6,
+                            activeDotColor:
+                                Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+
+          // MY STATS
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+              child: Column(
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'My Stats',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FutureBuilder<_StatsVM>(
+                    future: _statsFuture,
+                    builder: (context, snap) {
+                      if (snap.connectionState != ConnectionState.done) {
+                        return const SizedBox(
+                          height: 160,
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      if (snap.hasError) {
+                        return Text('Error loading stats: ${snap.error}');
+                      }
+                      final s = snap.data ?? _StatsVM.zero();
+                      return _StatsGrid(stats: s);
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -256,86 +259,97 @@ class _HomeScreenState extends State<HomeScreen> {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(right: 10),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Image.network(
-              t.cover,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) =>
-                  Container(color: const Color(0xFFE2E8F0)),
-            ),
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.65),
-                    Colors.black.withValues(alpha: 0.10),
-                  ],
+      child: Material(
+        type: MaterialType.transparency, // asegura Material ancestro para InkWell
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: () {
+            // GoRouter: vamos al detalle que hace fetch por id
+            context.push('/tour/${t.id}');
+          },
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.network(
+                  t.cover,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) =>
+                      Container(color: const Color(0xFFE2E8F0)),
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Spacer(),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.90),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.star_rounded,
-                            color: Colors.white, size: 18),
-                        const SizedBox(width: 6),
-                        Text(
-                          t.rating.toStringAsFixed(1),
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800),
-                        ),
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.65),
+                        Colors.black.withValues(alpha: 0.10),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    t.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      height: 1.1,
-                    ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Spacer(),
+                      Container(
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withValues(alpha: 0.90),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.star_rounded,
+                                color: Colors.white, size: 18),
+                            const SizedBox(width: 6),
+                            Text(
+                              t.rating.toStringAsFixed(1),
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        t.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          height: 1.1,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        t.subtitle,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.90),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    t.subtitle,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.90),
-                      fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-// --------- Widgets de Stats ----------
+/// --------- Widgets de Stats ----------
 class _StatsGrid extends StatelessWidget {
   final _StatsVM stats;
   const _StatsGrid({required this.stats});
@@ -416,10 +430,8 @@ class _BigValue extends StatelessWidget {
     return Text(
       value,
       textAlign: TextAlign.center,
-      style: Theme.of(context)
-          .textTheme
-          .headlineSmall
-          ?.copyWith(fontWeight: FontWeight.w800),
+      style:
+          Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
     );
   }
 }

@@ -1,43 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../screen/auth/login_screen.dart';
-import '../screen/shell/home_shell.dart';
-import '../screen/tour/tour_detail_screen.dart';
-
-final _supabase = Supabase.instance.client;
+import '../screen/home/home_screen.dart';
+import '../screen/catalog/catalog_screen.dart';
+import '../screen/map/map_screen.dart';
+import '../screen/menu/menu_screen.dart';
+import '../screen/tour/tour_detail_route.dart';   // loader que hicimos
+import '../ui/widgets/av_bottom_nav.dart';
 
 final appRouter = GoRouter(
-  initialLocation: '/home',
-  redirect: (context, state) {
-    final session = _supabase.auth.currentSession;
-    final path = state.uri.path; // v16: usar uri.path en lugar de subloc
-    final isLogin = path == '/login';
-    if (session == null) {
-      return isLogin ? null : '/login';
-    } else {
-      return isLogin ? '/home' : null;
-    }
-  },
+  initialLocation: '/',
   routes: [
-    GoRoute(
-      path: '/login',
-      builder: (context, state) => const LoginScreen(),
-    ),
-    // Shell con bottom tabs
+    // Shell con bottom nav persistente
     ShellRoute(
-      builder: (context, state, child) => HomeShell(child: child),
+      builder: (context, state, child) => AvBottomNav(child: child),
       routes: [
-        GoRoute(path: '/home', builder: (c, s) => const SizedBox.shrink()),
-        GoRoute(path: '/catalog', builder: (c, s) => const SizedBox.shrink()),
-        GoRoute(path: '/map', builder: (c, s) => const SizedBox.shrink()),
-        GoRoute(path: '/profile', builder: (c, s) => const SizedBox.shrink()),
+        GoRoute(path: '/',        name: 'home',    builder: (_, __) => const HomeScreen()),
+        GoRoute(path: '/catalog', name: 'catalog', builder: (_, __) => const CatalogScreen()),
+        GoRoute(path: '/map',     name: 'map',     builder: (_, __) => const MapScreen()),
+        GoRoute(path: '/menu', name: 'menu', builder: (_, __) => const MenuScreen()),
       ],
     ),
+    // Detalle de tour (sin bottom nav)
     GoRoute(
       path: '/tour/:id',
-      builder: (context, state) => TourDetailScreen(tourId: state.pathParameters['id']!),
+      name: 'tour',
+      builder: (_, state) => TourDetailRoute(id: state.pathParameters['id']!),
     ),
   ],
+  errorBuilder: (context, state) => Scaffold(
+    appBar: AppBar(title: const Text('Error')),
+    body: Center(child: Text('Route error: ${state.error}')),
+  ),
 );
