@@ -35,9 +35,9 @@ Este README explica **requisitos** y **pasos para correr la app** usando lo defi
 
 ### b) Variables de entorno
 
-La app usa un archivo **`.env`** en la raíz (no se versiona). Provee un **`.env.example`** en el repo para guiar a otros devs.
+La app usa un archivo **`.env`** en la raíz (no se versiona).
 
-**`.env.example`:**
+**`.env`:**
 
 ```env
 # Claves públicas (seguras para cliente):
@@ -52,7 +52,7 @@ FEATURE_FLAGS=
 **No** subas valores reales. Cada dev debe copiar:
 
 ```bash
-cp .env.example .env
+cp .env
 # Luego completar valores reales
 ```
 
@@ -163,7 +163,7 @@ flutter pub get
 3. **Variables de entorno**
 
 ```bash
-cp .env.example .env
+cp .env
 # Completa SUPABASE_URL y SUPABASE_ANON_KEY
 ```
 
@@ -260,7 +260,7 @@ root/
   supabase/
     migrations/      # SQL versionado
     seed.sql         # (opcional) datos de ejemplo
-  .env.example
+  .env
   pubspec.yaml
 ```
 
