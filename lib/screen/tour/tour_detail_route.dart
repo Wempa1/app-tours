@@ -37,6 +37,8 @@ Future<TourDetailModel> _loadTour(String id) async {
   final sb = Supabase.instance.client;
 
   // Tour principal
+  // Tour principal
+  // Tour principal
   final row = await sb
       .from('tours_view_public')
       .select()
@@ -55,6 +57,29 @@ Future<TourDetailModel> _loadTour(String id) async {
   final description =
       (row['description'] ?? row['short_description'] ?? '') as String;
 
+  // Paradas (vista exacta)
+  final stopsRows = await sb
+      .from('tour_stops_view_public')
+      .select('ord,title,distance_m,walk_min,thumb_url')
+      .eq('tour_id', id)
+      .order('ord', ascending: true);
+
+  final stopsList = List<Map<String, dynamic>>.from(stopsRows as List? ?? const []);
+
+  final stops = stopsList.map((m) {
+    final ord = (m['ord'] as num?)?.toInt() ?? 0;
+    final title = (m['title'] ?? '') as String;
+    final distM = (m['distance_m'] as num?)?.toInt();
+    final walkMin = (m['walk_min'] as num?)?.toInt();
+    final subtitle =
+        (distM != null && walkMin != null) ? '$distM m · $walkMin m' : null;
+    return TourStop(
+      order: ord == 0 ? 1 : ord,
+      title: title.isEmpty ? 'Stop ${ord == 0 ? 1 : ord}' : title,
+      subtitle: subtitle,
+      thumbUrl: (m['thumb_url'] ?? '') as String?,
+    );
+  }).toList();
   // Paradas (vista exacta)
   final stopsRows = await sb
       .from('tour_stops_view_public')

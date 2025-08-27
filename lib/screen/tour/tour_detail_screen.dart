@@ -43,6 +43,7 @@ String _durationText(Duration d) {
   final h = d.inHours;
   final m = d.inMinutes % 60;
   if (h > 0 && m > 0) return '$h h $m m';
+  if (h > 0 && m > 0) return '$h h $m m';
   if (h > 0) return '$h h';
   return '$m m';
 }
@@ -227,47 +228,50 @@ class _StatsBar extends StatelessWidget {
         Expanded(
           child: SizedBox(
             height: 76, // ✅ misma altura para las 3 tarjetas
+            child: SizedBox(
+            height: 76, // ✅ misma altura para las 3 tarjetas
             child: Container(
-              decoration: BoxDecoration(
-                color: theme.brightness == Brightness.dark
-                    ? const Color(0xFF0F172A)
-                    : Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
+                decoration: BoxDecoration(
                   color: theme.brightness == Brightness.dark
-                      ? const Color(0xFF1F2937)
-                      : const Color(0xFFE2E8F0),
-                ),
-              ),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(item.icon, size: 18, color: theme.colorScheme.primary),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          item.value,
-                          style: theme.textTheme.labelLarge
-                              ?.copyWith(fontWeight: FontWeight.w800),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          item.label,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.textTheme.bodySmall?.color
-                                ?.withValues(alpha: 0.7),
-                          ),
-                        ),
-                      ],
-                    ),
+                      ? const Color(0xFF0F172A)
+                      : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: theme.brightness == Brightness.dark
+                        ? const Color(0xFF1F2937)
+                        : const Color(0xFFE2E8F0),
                   ),
-                ],
+                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(item.icon, size: 18, color: theme.colorScheme.primary),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            item.value,
+                            style: theme.textTheme.labelLarge
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            item.label,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.textTheme.bodySmall?.color
+                                  ?.withValues(alpha: 0.7),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+              ),
               ),
             ),
           ),
@@ -350,6 +354,7 @@ class _StopTile extends StatelessWidget {
       subtitle: stop.subtitle != null ? Text(stop.subtitle!) : null,
       trailing: const Icon(Icons.chevron_right_rounded),
       onTap: () {
+        // Navegar al detalle de la parada (cuando exista)
         // Navegar al detalle de la parada (cuando exista)
       },
     );

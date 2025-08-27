@@ -1,9 +1,12 @@
 // lib/screen/home/home_screen.dart
+// lib/screen/home/home_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/location_service.dart';
 import '../../services/location_service.dart';
 
 /// --------- ViewModels ---------
@@ -37,12 +40,14 @@ class _StatsVM {
 }
 
 /// --------- Screen ---------
-class HomeScreen extends ConsumerStatefulWidget {
+class HomeScreen extends ConsumerConsumerStatefulWidget {
   const HomeScreen({super.key});
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
+class _HomeScreenState extends ConsumerState<HomeScreen> {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _sb = Supabase.instance.client;
   final _heroCtrl = PageController(viewportFraction: 0.92);
@@ -56,6 +61,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.initState();
     _toursFuture = _loadToursNearbyOrDefault();
     _statsFuture = _loadStats();
+    _toursFuture = _loadToursNearbyOrDefault();
+    _statsFuture = _loadStats();
   }
 
   @override
@@ -65,6 +72,41 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.dispose();
   }
 
+  // ---- Tours cercanos (RPC) con fallback a vista pública ----
+  Future<List<_TourVM>> _loadToursNearbyOrDefault() async {
+  // 1) Intentar ubicación del usuario
+  final loc = ref.read(locationServiceProvider);
+  final pos = await loc.currentPositionOrNull();
+
+  // 2) Si hay ubicación → usar función tours_nearby(p_lat, p_lon, p_limit)
+  if (pos != null) {
+    final rows = await _sb.rpc('tours_nearby', params: {
+      'p_lat': pos.latitude,
+      'p_lon': pos.longitude,
+      'p_limit': 12,
+    });
+
+    final list = List<Map<String, dynamic>>.from(rows as List? ?? const []);
+    if (list.isNotEmpty) {
+      return list.map((m) => _TourVM(
+        id: (m['id'] ?? '').toString(),
+        title: (m['title'] ?? '').toString(),
+        cover: (m['cover_url'] ?? '').toString(),
+        stops: (m['stops_count'] as num?)?.toInt() ?? 0,
+        durationMin: (m['duration_minutes'] as num?)?.toInt() ?? 0,
+        lengthKm: (m['distance_km'] as num?)?.toDouble()
+                  ?? (m['distance_km'] as int?)?.toDouble() ?? 0.0,
+        rating: 4.8, // placeholder
+      )).toList();
+    }
+  }
+
+  // 3) Fallback → vista pública (ordenar por un campo que exista)
+  final rows = await _sb
+      .from('tours_view_public')
+      .select()
+      .order('title', ascending: true)   // <- antes era 'priority'
+      .limit(12);
   // ---- Tours cercanos (RPC) con fallback a vista pública ----
   Future<List<_TourVM>> _loadToursNearbyOrDefault() async {
   // 1) Intentar ubicación del usuario
@@ -112,7 +154,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     rating: 4.8,
   )).toList();
 }
+  final list = List<Map<String, dynamic>>.from(rows as List? ?? const []);
+  return list.map((m) => _TourVM(
+    id: (m['id'] ?? '').toString(),
+    title: (m['title'] ?? '').toString(),
+    cover: (m['cover_url'] ?? '').toString(),
+    stops: (m['stops_count'] as num?)?.toInt() ?? 0,
+    durationMin: (m['duration_minutes'] as num?)?.toInt() ?? 0,
+    lengthKm: (m['distance_km'] as num?)?.toDouble() ?? 0.0,
+    rating: 4.8,
+  )).toList();
+}
 
+  // ---- Stats desde la vista user_stats_v ----
   // ---- Stats desde la vista user_stats_v ----
   Future<_StatsVM> _loadStats() async {
     final userId = _sb.auth.currentUser?.id;
@@ -123,6 +177,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           .from('user_stats_v')
           .select()
           .eq('user_id', userId)
+          .maybeSingle();
           .maybeSingle();
 
       if (row == null) return _StatsVM.zero();
@@ -151,6 +206,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             floating: true,
             snap: true,
             automaticallyImplyLeading: false,
+            pinned: false,
             pinned: false,
             toolbarHeight: 64,
             titleSpacing: 20,
@@ -294,6 +350,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           borderRadius: BorderRadius.circular(24),
           onTap: () {
             // GoRouter: detalle por id (ya tienes la ruta /tour/:id)
+            // GoRouter: detalle por id (ya tienes la ruta /tour/:id)
             context.push('/tour/${t.id}');
           },
           child: ClipRRect(
@@ -328,8 +385,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
                           color: theme.colorScheme.primary
+                              
                               .withValues(alpha: 0.90),
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -441,6 +501,7 @@ class _StatCard extends StatelessWidget {
           Text(
             title,
             style:
+               
                 theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             textAlign: TextAlign.center,
           ),
@@ -461,6 +522,10 @@ class _BigValue extends StatelessWidget {
     return Text(
       value,
       textAlign: TextAlign.center,
+      style: Theme.of(context)
+          .textTheme
+          .headlineSmall
+          ?.copyWith(fontWeight: FontWeight.w800),
       style: Theme.of(context)
           .textTheme
           .headlineSmall

@@ -24,6 +24,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
         .from('tours_view_public')
         .select()
         .order('title', ascending: true);
+        .order('title', ascending: true);
     // 'rows' ya es List<dynamic>; lo normalizamos de forma segura:
     return List<Map<String, dynamic>>.from(rows as List? ?? const []);
   }
