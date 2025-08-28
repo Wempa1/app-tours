@@ -1,3 +1,8 @@
+import 'dart:async';
+
+import 'package:audio_session/audio_session.dart';
+import 'package:avanti/core/logging/app_logger.dart';
+import 'package:avanti/core/ui/app_snack.dart';
 import 'package:avanti/features/tours/data/models.dart';
 import 'package:avanti/features/tours/data/progress_repo.dart';
 import 'package:avanti/features/tours/data/tour_repo.dart';
@@ -5,7 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 
-// Providers sencillos (puedes moverlos a un archivo común si prefieres)
+// Providers (puedes moverlos a un archivo común si lo prefieres)
 final tourRepoProvider = Provider<TourRepo>((_) => SupabaseTourRepo());
 final progressRepoProvider = Provider<ProgressRepo>(
   (_) => SupabaseProgressRepo(),
@@ -22,60 +27,157 @@ class TourDetailScreen extends ConsumerStatefulWidget {
   ConsumerState<TourDetailScreen> createState() => _TourDetailScreenState();
 }
 
-class _TourDetailScreenState extends ConsumerState<TourDetailScreen> {
+class _TourDetailScreenState extends ConsumerState<TourDetailScreen>
+    with WidgetsBindingObserver {
   late final AudioPlayer _player;
+
+  // Control de estado de carga / parada actual
   bool _loadingAudio = false;
   String? _currentStopId;
+
+  // Guardamos el audio ya firmado para no pedirlo otra vez si se repite la parada
+  String? _loadedAudioPath;
+  String? _loadedSignedUrl;
+
+  // Para restaurar si hubo pausa por background/interrupción
+  bool _wasPlayingBeforeInterruption = false;
+  Duration _savedPosition = Duration.zero;
+
+  // Suscripciones a eventos del sistema (audio focus / becoming noisy)
+  StreamSubscription<AudioInterruptionEvent>? _interruptionSub;
+  StreamSubscription<void>? _becomingNoisySub;
 
   late Future<List<StopWithI18n>> _stopsFuture;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _player = AudioPlayer();
+
+    _configureAudioSession();
+
     final lang = ref.read(currentLangProvider);
     _stopsFuture = ref
         .read(tourRepoProvider)
         .listStopsWithI18n(tourId: widget.tourId, lang: lang);
   }
 
+  Future<void> _configureAudioSession() async {
+    final session = await AudioSession.instance;
+    await session.configure(const AudioSessionConfiguration.speech());
+    // Pausar si se desconectan auriculares / cambia la salida
+    _becomingNoisySub = session.becomingNoisyEventStream.listen((_) async {
+      AppLogger.i('Audio becoming noisy → pause');
+      await _safePause();
+    });
+    // Interrupciones (llamadas / otra app toma audio)
+    _interruptionSub = session.interruptionEventStream.listen((event) async {
+      if (event.begin) {
+        _wasPlayingBeforeInterruption = _player.playing;
+        AppLogger.w('Audio interrupted (begin): ${event.type}');
+        await _safePause();
+      } else {
+        AppLogger.i('Audio interruption ended: ${event.type}');
+        // No reanudamos automáticamente; el usuario decide.
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _interruptionSub?.cancel();
+    _becomingNoisySub?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+
     _player.dispose();
     super.dispose();
+  }
+
+  // Pausa segura + guarda posición
+  Future<void> _safePause() async {
+    try {
+      _savedPosition = _player.position;
+      await _player.pause();
+      setState(() {});
+    } catch (e, st) {
+      AppLogger.w('Pause failed', e, st);
+    }
+  }
+
+  // Ciclo de vida de la app: pausamos en background
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      if (_player.playing) {
+        AppLogger.i('Lifecycle: $state → pause player');
+        _safePause();
+      }
+    }
+    super.didChangeAppLifecycleState(state);
   }
 
   Future<void> _playStop(StopWithI18n s) async {
     final repo = ref.read(tourRepoProvider);
     final audioPath = s.i18n?.audioPath;
+
     if (audioPath == null || audioPath.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Esta parada aún no tiene audio.')),
-        );
-      }
+      AppSnack.showInfo('Esta parada aún no tiene audio.');
       return;
     }
+
     setState(() {
       _loadingAudio = true;
       _currentStopId = s.stop.id;
     });
+
     try {
-      final signed = await repo.signedAudioUrl(audioPath);
-      if (signed == null || signed.isEmpty) {
-        throw Exception('No se pudo firmar la URL del audio.');
+      // Garantizamos no-nulo usando 'late final'
+      late final String signedUrl;
+
+      if (_loadedAudioPath == audioPath && _loadedSignedUrl != null) {
+        signedUrl = _loadedSignedUrl!;
+      } else {
+        final sUrl = await repo.signedAudioUrl(audioPath);
+        if (sUrl == null || sUrl.isEmpty) {
+          throw Exception('No se pudo firmar la URL del audio.');
+        }
+        signedUrl = sUrl;
+        _loadedAudioPath = audioPath;
+        _loadedSignedUrl = signedUrl;
       }
-      await _player.setUrl(signed);
+
+      await _player.setUrl(signedUrl);
+
+      if (_savedPosition > Duration.zero) {
+        await _player.seek(_savedPosition);
+        _savedPosition = Duration.zero;
+      }
+
       await _player.play();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Audio error: $e')));
-      }
+      setState(() {}); // refresca icono play/pause
+    } catch (e, st) {
+      AppLogger.e('Audio error', e, st);
+      AppSnack.showError('No pudimos reproducir el audio. Intenta de nuevo.');
     } finally {
       if (mounted) {
         setState(() => _loadingAudio = false);
+      }
+    }
+  }
+
+  Future<void> _togglePlayPause() async {
+    if (_player.playing) {
+      await _safePause();
+    } else {
+      try {
+        await _player.play();
+        setState(() {});
+      } catch (e, st) {
+        AppLogger.e('toggle play error', e, st);
+        AppSnack.showError('No pudimos continuar la reproducción.');
       }
     }
   }
@@ -85,7 +187,6 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen> {
     required StopWithI18n current,
   }) async {
     final repo = ref.read(progressRepoProvider);
-    // El índice de la parada (1-based para completed_stops)
     final idx = stops.indexWhere((e) => e.stop.id == current.stop.id);
     final completed = (idx >= 0) ? idx + 1 : 1;
 
@@ -96,29 +197,15 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen> {
         completedStops: completed,
       );
 
-      // Si completó todas las paradas, registra la finalización del tour
       if (completed >= stops.length && stops.isNotEmpty) {
         await repo.recordCompletion(tourId: widget.tourId);
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('¡Tour completado!')));
-        }
+        AppSnack.showInfo('¡Tour completado!');
       } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Progreso guardado: $completed/${stops.length}'),
-            ),
-          );
-        }
+        AppSnack.showInfo('Progreso guardado: $completed/${stops.length}');
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error de progreso: $e')));
-      }
+    } catch (e, st) {
+      AppLogger.e('progress error', e, st);
+      AppSnack.showError('No pudimos guardar tu progreso.');
     }
   }
 
@@ -127,7 +214,23 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Tour')),
+      appBar: AppBar(
+        title: const Text('Tour'),
+        actions: [
+          // Botón Play/Pause global (para la parada actual)
+          IconButton(
+            tooltip: _player.playing ? 'Pausar' : 'Reproducir',
+            icon: Icon(
+              _player.playing
+                  ? Icons.pause_circle_filled_rounded
+                  : Icons.play_circle_fill_rounded,
+            ),
+            onPressed: (_loadedSignedUrl == null)
+                ? null // hasta que el usuario elija una parada
+                : _togglePlayPause,
+          ),
+        ],
+      ),
       body: FutureBuilder<List<StopWithI18n>>(
         future: _stopsFuture,
         builder: (context, snap) {
@@ -193,19 +296,24 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          _loadingAudio && isCurrent
-                              ? const SizedBox(
-                                  width: 28,
-                                  height: 28,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : IconButton(
-                                  tooltip: 'Reproducir',
-                                  icon: const Icon(Icons.play_arrow_rounded),
-                                  onPressed: () => _playStop(s),
-                                ),
+                          if (_loadingAudio && isCurrent)
+                            const SizedBox(
+                              width: 28,
+                              height: 28,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          else
+                            IconButton(
+                              tooltip: isCurrent && _player.playing
+                                  ? 'Pausar'
+                                  : 'Reproducir',
+                              icon: Icon(
+                                isCurrent && _player.playing
+                                    ? Icons.pause_rounded
+                                    : Icons.play_arrow_rounded,
+                              ),
+                              onPressed: () => _playStop(s),
+                            ),
                         ],
                       ),
                       if (desc.isNotEmpty) ...[
@@ -231,13 +339,8 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen> {
                             icon: const Icon(Icons.directions_walk),
                             label: const Text('Cómo llegar'),
                             onPressed: () {
-                              // Aquí luego abriremos navegación hacia la siguiente parada
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Direcciones aún no implementadas.',
-                                  ),
-                                ),
+                              AppSnack.showInfo(
+                                'Direcciones aún no implementadas.',
                               );
                             },
                           ),

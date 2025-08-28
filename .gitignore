@@ -46,3 +46,4 @@ app.*.map.json
 assets/.env
 supabase/schema.sql
 supabase/seed.sql
+supabase/.temp/*
