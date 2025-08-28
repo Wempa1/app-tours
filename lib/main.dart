@@ -1,34 +1,31 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'router/app_router.dart';
+import 'core/config/app_keys.dart';
+import 'core/config/supabase_client.dart';
+import 'core/logging/app_logger.dart';
+import 'core/router.dart';
 import 'core/theme.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: 'assets/.env');
+  // Captura global de errores de Flutter
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.dumpErrorToConsole(details);
+    AppLogger.e('FlutterError', details.exception, details.stack);
+  };
 
-  final url = dotenv.env['SUPABASE_URL'] ?? '';
-  final anon = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
-
-  if (url.isEmpty || anon.isEmpty) {
-    debugPrint('⚠️ Missing SUPABASE_URL or SUPABASE_ANON_KEY in assets/.env');
-  }
-
-  await Supabase.initialize(url: url, anonKey: anon);
-  debugPrint('✅ Avanti main() boot');
-
-  runApp(
-    
-    const ProviderScope( // ⬅️ Riverpod scope para providers globales
-      child: ProviderScope( // ⬅️ Riverpod scope para providers globales
-      child: AvantiApp(),
-    ),
-  ,
-    ),
+  // Zona protegida para errores asíncronos no capturados
+  runZonedGuarded(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
+      await AppSupabase.init();
+      runApp(const ProviderScope(child: AvantiApp()));
+    },
+    (error, stack) {
+      AppLogger.e('Uncaught zone error', error, stack);
+    },
   );
 }
 
@@ -39,11 +36,12 @@ class AvantiApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp.router(
       title: 'Avanti',
-      theme: buildTheme(),           // tema claro
-      darkTheme: buildDarkTheme(),   // tema oscuro
-      themeMode: ThemeMode.system,   // respeta el modo del sistema
+      theme: buildTheme(),
+      darkTheme: buildDarkTheme(),
+      themeMode: ThemeMode.system,
       routerConfig: appRouter,
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: AppKeys.scaffoldMessenger, // <— Snackbars globales
     );
   }
 }

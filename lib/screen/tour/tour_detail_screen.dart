@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+
+//TODO: DEPRECATED
 
 /// ===== Modelos ligeros (ajusta a tu fuente real/Supabase) ===================
 class TourStop {
@@ -58,9 +60,7 @@ class TourDetailScreen extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(tour.name, overflow: TextOverflow.ellipsis),
-      ),
+      appBar: AppBar(title: Text(tour.name, overflow: TextOverflow.ellipsis)),
       body: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
@@ -74,10 +74,12 @@ class TourDetailScreen extends StatelessWidget {
                     Center(
                       child: CircleAvatar(
                         radius: 44,
-                        backgroundColor:
-                            theme.colorScheme.primary.withValues(alpha: 0.10),
-                        backgroundImage:
-                            CachedNetworkImageProvider(tour.logoUrl!),
+                        backgroundColor: theme.colorScheme.primary.withValues(
+                          alpha: 0.10,
+                        ),
+                        backgroundImage: CachedNetworkImageProvider(
+                          tour.logoUrl!,
+                        ),
                         child: const SizedBox.shrink(),
                       ),
                     ),
@@ -109,8 +111,9 @@ class TourDetailScreen extends StatelessWidget {
                                 Container(color: const Color(0xFFE2E8F0)),
                             errorWidget: (c, _, __) => Container(
                               color: const Color(0xFFE2E8F0),
-                              child:
-                                  const Icon(Icons.image_not_supported_outlined),
+                              child: const Icon(
+                                Icons.image_not_supported_outlined,
+                              ),
                             ),
                           ),
                           // Vignette sutil para legibilidad
@@ -180,8 +183,7 @@ class TourDetailScreen extends StatelessWidget {
                     title: 'About this tour',
                     child: Text(
                       tour.description,
-                      style:
-                          theme.textTheme.bodyLarge?.copyWith(height: 1.45),
+                      style: theme.textTheme.bodyLarge?.copyWith(height: 1.45),
                     ),
                   ),
 
@@ -229,8 +231,8 @@ class _StatsBar extends StatelessWidget {
           child: SizedBox(
             height: 76, // ✅ misma altura para las 3 tarjetas
             child: SizedBox(
-            height: 76, // ✅ misma altura para las 3 tarjetas
-            child: Container(
+              height: 76, // ✅ misma altura para las 3 tarjetas
+              child: Container(
                 decoration: BoxDecoration(
                   color: theme.brightness == Brightness.dark
                       ? const Color(0xFF0F172A)
@@ -242,8 +244,10 @@ class _StatsBar extends StatelessWidget {
                         : const Color(0xFFE2E8F0),
                   ),
                 ),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -256,8 +260,9 @@ class _StatsBar extends StatelessWidget {
                         children: [
                           Text(
                             item.value,
-                            style: theme.textTheme.labelLarge
-                                ?.copyWith(fontWeight: FontWeight.w800),
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                           const SizedBox(height: 2),
                           Text(
@@ -271,7 +276,7 @@ class _StatsBar extends StatelessWidget {
                       ),
                     ),
                   ],
-              ),
+                ),
               ),
             ),
           ),
@@ -313,8 +318,9 @@ class _SectionCard extends StatelessWidget {
           children: [
             Text(
               title,
-              style:
-                  theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
             ),
             const SizedBox(height: 10),
             child,
@@ -344,12 +350,16 @@ class _StopTile extends StatelessWidget {
         alignment: Alignment.center,
         child: Text(
           '${stop.order}', // braces ok aquí (expresión), pero puedes usar '${
-          style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
+          style: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w900,
+          ),
         ),
       ),
       title: Text(
         stop.title,
-        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        style: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
       ),
       subtitle: stop.subtitle != null ? Text(stop.subtitle!) : null,
       trailing: const Icon(Icons.chevron_right_rounded),

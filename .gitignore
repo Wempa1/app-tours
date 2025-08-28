@@ -44,3 +44,5 @@ app.*.map.json
 
 # Env (secrets)
 assets/.env
+supabase/schema.sql
+supabase/seed.sql

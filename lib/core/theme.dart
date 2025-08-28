@@ -24,15 +24,17 @@ ThemeData _base(Brightness brightness) {
     useMaterial3: true,
     brightness: brightness,
     colorScheme: colorScheme,
-    scaffoldBackgroundColor:
-        isDark ? const Color(0xFF0B1220) : AvColors.surface,
+    scaffoldBackgroundColor: isDark
+        ? const Color(0xFF0B1220)
+        : AvColors.surface,
     textTheme: textTheme.copyWith(
-      displayLarge:
-          textTheme.displayLarge?.copyWith(fontWeight: FontWeight.w700),
-      headlineMedium:
-          textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
-      titleLarge:
-          textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+      displayLarge: textTheme.displayLarge?.copyWith(
+        fontWeight: FontWeight.w700,
+      ),
+      headlineMedium: textTheme.headlineMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+      ),
+      titleLarge: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
     ),
     appBarTheme: AppBarTheme(
       centerTitle: false,
@@ -44,8 +46,7 @@ ThemeData _base(Brightness brightness) {
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: isDark ? const Color(0xFF0F172A) : Colors.white,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide(
@@ -71,10 +72,8 @@ ThemeData _base(Brightness brightness) {
       style: ElevatedButton.styleFrom(
         backgroundColor: AvColors.primary,
         foregroundColor: Colors.white,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
         textStyle: const TextStyle(fontWeight: FontWeight.w700),
       ),
     ),
@@ -85,8 +84,9 @@ ThemeData _base(Brightness brightness) {
         color: isDark ? Colors.white : AvColors.textDark,
         fontWeight: FontWeight.w600,
       ),
-      backgroundColor:
-          isDark ? const Color(0xFF111827) : const Color(0xFFF1F5F9),
+      backgroundColor: isDark
+          ? const Color(0xFF111827)
+          : const Color(0xFFF1F5F9),
       selectedColor: colorScheme.primaryContainer,
       secondarySelectedColor: colorScheme.primaryContainer,
     ),

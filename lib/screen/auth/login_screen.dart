@@ -20,19 +20,27 @@ class _LoginScreenState extends State<LoginScreen> {
     final db = Supabase.instance.client;
     try {
       if (_isSignUp) {
-        final res = await auth.signUp(email: _email.text.trim(), password: _pass.text);
+        final res = await auth.signUp(
+          email: _email.text.trim(),
+          password: _pass.text,
+        );
         final userId = res.user?.id;
         if (userId != null) {
           // upsert del profile para evitar warnings y tener datos mínimos
           await db.from('profiles').upsert({'id': userId, 'display_name': ''});
         }
       } else {
-        await auth.signInWithPassword(email: _email.text.trim(), password: _pass.text);
+        await auth.signInWithPassword(
+          email: _email.text.trim(),
+          password: _pass.text,
+        );
       }
       if (mounted) context.go('/home');
     } on AuthException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -48,7 +56,10 @@ class _LoginScreenState extends State<LoginScreen> {
         child: AutofillGroup(
           child: Column(
             children: [
-              Text(_isSignUp ? 'Create account' : 'Sign in', style: Theme.of(context).textTheme.headlineSmall),
+              Text(
+                _isSignUp ? 'Create account' : 'Sign in',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
               const SizedBox(height: 16),
               TextField(
                 controller: _email,
@@ -69,8 +80,12 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 12),
               TextButton(
-                onPressed: _loading ? null : () => setState(() => _isSignUp = !_isSignUp),
-                child: Text(_isSignUp ? 'I already have an account' : 'Create account'),
+                onPressed: _loading
+                    ? null
+                    : () => setState(() => _isSignUp = !_isSignUp),
+                child: Text(
+                  _isSignUp ? 'I already have an account' : 'Create account',
+                ),
               ),
             ],
           ),
