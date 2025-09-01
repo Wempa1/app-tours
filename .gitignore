@@ -47,3 +47,6 @@ assets/.env
 supabase/schema.sql
 supabase/seed.sql
 supabase/.temp/*
+android/local.properties
+.vscode/extensions.json
+.vscode/settings.json

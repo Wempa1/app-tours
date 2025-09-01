@@ -1,351 +1,284 @@
-# Avanti — Guía de Onboarding para Colaboradores
+# Avanti – Guía de ejecución (App + Back End)
 
-Bienvenido/a al proyecto **Avanti** (autoguías de turismo por audio). Este README te guía para arrancar el entorno desde cero, entender la arquitectura (Front/Back), ejecutar la app, correr tests y contribuir con buenas prácticas.
+Este README explica **requisitos** y **pasos para correr la app** usando lo definido en la conversación **“Back End”** de este proyecto (Supabase como BaaS, RLS, buckets de Storage, slugs, roles, etc.). Está pensado para que **cualquier colaborador** pueda levantar el proyecto rápido, sin conocer los detalles previos.
 
----
-
-## Índice
-
-1. [Requisitos de sistema](#requisitos-de-sistema)
-2. [Instalación de herramientas](#instalación-de-herramientas)
-3. [Clonado y configuración inicial](#clonado-y-configuración-inicial)
-4. [Variables de entorno y secretos](#variables-de-entorno-y-secretos)
-5. [Dependencias del proyecto](#dependencias-del-proyecto)
-6. [Ejecución en emulador/dispositivo](#ejecución-en-emuladordispositivo)
-7. [Scripts y comandos útiles](#scripts-y-comandos-útiles)
-8. [Arquitectura del proyecto](#arquitectura-del-proyecto)
-9. [Front-End vs Back-End (responsabilidades)](#front-end-vs-back-end-responsabilidades)
-10. [Estructura de carpetas](#estructura-de-carpetas)
-11. [Estándares de código y CI](#estándares-de-código-y-ci)
-12. [Flujo de ramas (Git)](#flujo-de-ramas-git)
-13. [Cómo contribuir (PRs)](#cómo-contribuir-prs)
-14. [Tests / QA](#tests--qa)
-15. [Problemas comunes (Troubleshooting)](#problemas-comunes-troubleshooting)
-16. [Contacto y soporte interno](#contacto-y-soporte-interno)
+> **Asume** que ya configuraste Supabase como en “Back End”: RLS activado, buckets de Storage, función `slugify`, y convención de rutas para assets. Si cambiaste algún nombre en tu proyecto real, **ajústalo en `.env` y en la sección de Storage**.
 
 ---
 
-## Requisitos de sistema
+## 1) Stack y arquitectura (resumen)
 
-* **SO**: Windows 10/11, macOS 12+ (Monterey) o Linux reciente.
-* **RAM**: 8 GB mínimo (recomendado 16 GB para emuladores).
-* **Almacenamiento**: 10–20 GB libres (SDKs + emuladores + dependencias).
+* **Frontend**: Flutter (Dart).
+* **Backend as a Service**: **Supabase** (Postgres + Auth + Storage + Edge Functions opcional).
+* **Auth**: Supabase Auth (usuario anónimo y/o email+password; opcional OAuth).
+* **Datos**: Tablas Postgres con **RLS** (Row Level Security) activado.
+* **Media** (audios/imágenes): **Supabase Storage** con rutas y permisos definidos.
+* **Convenciones** clave del Back End:
 
----
-
-## Instalación de herramientas
-
-### 1) Git
-
-* Windows: [https://git-scm.com/download/win](https://git-scm.com/download/win)
-* macOS: `brew install git` (o instalar Xcode que incluye Git)
-
-### 2) Flutter SDK (canal estable)
-
-* Guía oficial: [https://docs.flutter.dev/get-started/install](https://docs.flutter.dev/get-started/install)
-* Tras instalar, valida:
-
-  ```bash
-  flutter --version
-  flutter doctor
-  ```
-
-### 3) VS Code (recomendado)
-
-* Extensiones: **Flutter**, **Dart**, *Error Lens*, *Riverpod Snippets* (opcional).
-
-### 4) Android Studio (emuladores Android)
-
-* Instalar **Android SDK**, **Android SDK Platform-Tools**, **Android SDK Build-Tools**.
-* Aceptar licencias:
-
-  ```bash
-  flutter doctor --android-licenses
-  ```
-
-### 5) Xcode + CocoaPods (solo macOS/iOS)
-
-* Xcode desde App Store.
-* `sudo gem install cocoapods`
-
-### 6) Supabase CLI (opcional para tareas de BD)
-
-* macOS: `brew install supabase/tap/supabase`
-* Windows: usar Scoop o binarios desde releases de Supabase CLI.
+  * **Slugs** human-friendly (ciudad, tour, parada) generados con función `slugify` en BD.
+  * **RLS**: lectura pública controlada (o sólo autenticados), escritura restringida.
+  * **Storage**: bucket principal `tours` (ajustable), con estructura de carpetas por **ciudad/tour/versión**.
 
 ---
 
-## Clonado y configuración inicial
+## 2) Requisitos previos
 
-```bash
-# elige tu carpeta de trabajo
-cd ~/dev    # (macOS/Linux)  |  cd C:\dev  (Windows)
+### a) Herramientas
 
-git clone https://github.com/Wempa1/app-tours.git
-cd app-tours
+* **Flutter SDK** `3.22+` (o la que uses en el proyecto).
+* **Dart** (incluido en Flutter).
+* **Android Studio** con SDK / emulador **o** Xcode (para iOS) en macOS.
+* **Git** y cuenta en GitHub (el repo ya existe).
+* **Supabase Project** (en la nube) con URL y llaves (anon y service\_role).
 
-flutter pub get
-flutter doctor
-```
+> En Windows, instala Flutter y Android Studio; configura un emulador Android. En macOS con Xcode, usa simulador iOS.
 
----
+### b) Variables de entorno
 
-## Variables de entorno y secretos
+La app usa un archivo **`.env`** en la raíz (no se versiona).
 
-Crea un archivo `.env` en la **raíz** del proyecto (NO lo subas al repo):
+**`.env`:**
 
-```
+```env
+# Claves públicas (seguras para cliente):
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
+
+# Opcionales
+SENTRY_DSN=
+FEATURE_FLAGS=
 ```
 
-> Las claves se gestionan en el proyecto de Supabase (Admin). Guarda el `.env` en un gestor de contraseñas.
 
-Para ejecutar ciertos **tests** que leen estas variables en CI/local, expórtalas en shell (ejemplo PowerShell):
+**No** subas valores reales. Cada dev debe copiar:
 
-```powershell
-$env:SUPABASE_URL="https://<tu-ref>.supabase.co"
-$env:SUPABASE_ANON_KEY="<tu-anon>"
-flutter test
+```bash
+cp .env
+# Luego completar valores reales
 ```
 
-> **Nunca** subas al repo `.env`, keystores, `key.properties` o keys de servicio.
+> Si compilas para Web, puedes usar `.env` o `--dart-define` según tu setup.
 
 ---
 
-## Dependencias del proyecto
+## 3) Supabase (según “Back End”)
 
-**Stack principal:** Flutter + Supabase + Riverpod + just\_audio + Isar.
+> Si tu proyecto ya está en producción en Supabase, **sólo necesitas las claves**. Si estás replicando el entorno desde cero:
 
-Dependencias directas más relevantes:
+### a) Crear proyecto y obtener claves
 
-* **supabase\_flutter** — SDK Supabase (auth, DB, storage)
-* **flutter\_dotenv** — carga de `.env`
-* **flutter\_riverpod** — estado
-* **go\_router** — navegación
-* **cached\_network\_image** — imágenes con caché
-* **just\_audio** / **audio\_session** — audio y audio focus
-* **geolocator** — ubicación del dispositivo
-* **flutter\_map** (Leaflet) — mapas
-* **isar** — almacenamiento local/offline
-* **intl**, **uuid**, **flutter\_svg**, **google\_fonts**, etc.
+1. Crea un **project** en [Supabase](https://supabase.com/).
+2. En **Project Settings → API**: copia **`Project URL`** y **`anon public key`** → colócalas en tu `.env`.
 
-Instalar dependencias:
+### b) Esquema de base de datos (tablas mínimas sugeridas)
+
+> **No versionamos tu esquema exacto** aquí: esta lista es orientativa según la conversación “Back End”. Adáptalo a tu SQL real.
+
+* `cities` (id, name, slug, ...)
+* `tours` (id, city\_id, title, slug, version, ...)
+* `stops` (id, tour\_id, title, slug, order\_index, ...)
+* `assets` (id, stop\_id, type, url, duration, language, ...)
+* `users` (perfil extendido si se requiere)
+
+### c) Función `slugify` (ejemplo genérico)
+
+```sql
+create or replace function public.slugify(txt text)
+returns text language plpgsql as $$
+begin
+  return lower(regexp_replace(trim(txt), '[^a-zA-Z0-9]+', '-', 'g'));
+end; $$;
+```
+
+> Si ya tienes una versión propia, no la dupliques.
+
+### d) RLS (Row Level Security)
+
+* **Activa RLS** en tablas públicas de lectura: por ejemplo `tours`, `stops`, `assets`.
+* Políticas típicas (ejemplos):
+
+  * **Read (anon)**: permitir `SELECT` a `anon`/`authenticated` si el recurso es público.
+  * **Write (authenticated)**: restringir `INSERT/UPDATE/DELETE` a usuarios del equipo o con un `role` (mediante claims/`auth.jwt()` o columnas owner).
+
+**Ejemplo lectura pública controlada:**
+
+```sql
+alter table public.tours enable row level security;
+create policy "read_public_tours"
+  on public.tours for select
+  to anon, authenticated
+  using (true);  -- Ajusta condición si usas flags de visibilidad
+```
+
+> Repite para `stops` y `assets`. Para escritura, crea políticas más estrictas (por equipo/admin).
+
+### e) Storage (bucket y estructura)
+
+* Crea bucket, p.ej. **`tours`**.
+* **Estructura de carpetas** (recomendada):
+
+```
+/tours/
+  <city-slug>/
+    <tour-slug>/
+      v1/
+        cover/                # imágenes portada
+        audio/<lang>/         # aac/mp3 por idioma
+        images/               # fotos paradas
+```
+
+* **Políticas de Storage**:
+
+  * **Lectura**: pública o autenticada según tu modelo.
+  * **Escritura**: restringida a tu equipo.
+
+**Ejemplo lectura pública en bucket `tours`:**
+
+```sql
+create policy "storage_read_tours"
+  on storage.objects for select
+  to anon, authenticated
+  using (bucket_id = 'tours');
+```
+
+> Ajusta las políticas a tu nivel de privacidad. Para escritura, usa `authenticated` con verificación adicional.
+
+---
+
+## 4) Configuración local de la app
+
+1. **Clonar el repo**
 
 ```bash
+git clone <URL-DEL-REPO>
+cd avanti-app
+```
+
+2. **Flutter deps**
+
+```bash
+flutter --version
 flutter pub get
 ```
 
-Actualizar (si cambiamos pubspec):
+3. **Variables de entorno**
 
 ```bash
-flutter pub upgrade --major-versions
+cp .env
+# Completa SUPABASE_URL y SUPABASE_ANON_KEY
 ```
+
+4. **Plataformas**
+
+* **Android**: abre Android Studio → instala SDKs → crea/emulador → `flutter devices`.
+* **iOS (macOS)**: `cd ios && pod install && cd ..` (si usas pods). Requiere Xcode.
+* **Web** (opcional): asegúrate de tener Chrome y `flutter config --enable-web` si aplica.
 
 ---
 
-## Ejecución en emulador/dispositivo
+## 5) Ejecutar en desarrollo
 
-### Configuración del emulador Android
-
-* Abrir **Android Studio → Device Manager**.
-* Crear AVD recomendado: **Pixel 6a**, API **34** (Android 14), imagen **x86\_64**.
-* Configurar:
-
-  * RAM: 2–4 GB
-  * Internal Storage: 2–4 GB
-  * Habilitar hardware acceleration (Intel HAXM/Hypervisor o AMD Hyper-V).
-
-### iOS (macOS)
-
-* Usa un **iPhone 15** (iOS 17+) en el Simulator.
-* Para *release* se requiere cuenta de Apple Developer y firma; para *debug*, no.
-
-### Ejecutar la app
+### Opción A – Terminal
 
 ```bash
-flutter run            # selecciona el dispositivo/emulador
-# o:
-flutter run -d chrome  # para pruebas rápidas web (limitado)
+# Android/iOS (selecciona dispositivo)
+flutter run
+
+# Web (si lo habilitaste)
+flutter run -d chrome
 ```
+
+### Opción B – VS Code
+
+* Instala extensiones **Flutter** y **Dart**.
+* `F5` o menú **Run → Start Debugging**.
+* Selecciona el dispositivo (barra inferior).
+
+> La app leerá `.env` en tiempo de compilación/arranque (según tu implementación). Verifica que las claves sean válidas.
 
 ---
 
-## Scripts y comandos útiles
+## 6) Datos y assets (cómo “engancha” la app)
+
+* La app **consulta Supabase** para:
+
+  * Listar **ciudades/tours** y sus **paradas**.
+  * Cargar **assets** (imágenes, audios) de **Storage** siguiendo la estructura indicada.
+* Si los **slugs** y rutas de Storage no coinciden, **actualiza**:
+
+  * En BD los slugs (`cities.slug`, `tours.slug`, `stops.slug`).
+  * En Storage, las carpetas.
+  * En la app, cualquier **path base** o **prefix** configurable.
+
+> Si incluyes archivos locales en `assets/`, declara en `pubspec.yaml`. Para producción, preferimos **Storage** y URLs públicas/firmadas.
+
+---
+
+## 7) Variables y flags útiles
+
+* `FEATURE_FLAGS` (opcional): habilitar/deshabilitar módulos (p.ej., idiomas, descarga offline).
+* `SENTRY_DSN` (opcional): monitoreo de errores.
+
+Expón estas variables con `--dart-define` si prefieres no usar `.env` en ciertos targets.
+
+---
+
+## 8) Comandos recomendados
 
 ```bash
-# Formatear y analizar
-dart format .
+# Verificación rápida
 flutter analyze
 
-# Ejecutar pruebas
-flutter test
-
-# Limpiar caches y artefactos
+# Limpiar y reconstruir
 flutter clean && flutter pub get
 
-# Android: aceptar licencias
-flutter doctor --android-licenses
-
-# Generar APK debug
-flutter build apk --debug
-
-# (iOS) instalar pods si hace falta
-cd ios && pod install && cd ..
+# Formateo
+dart format .
 ```
 
 ---
 
-## Arquitectura del proyecto
+## 9) Problemas comunes (y soluciones)
 
-* **Capa de UI (presentation)**: pantallas, widgets, navegación.
-* **Capa de dominio/datos (features/.../data)**: modelos, repositorios, caché local, integración Supabase.
-* **Core**: router, tema, utilidades (logger, retry, file cache), widgets compartidos.
-* **Backend**: Supabase (Postgres + RLS + Storage + RPC). Desde la app **nunca** escribimos tours/stops; ese flujo está protegido por RLS. La app solo lee contenido publicado y escribe **progreso**/completions del usuario.
-
-Diagrama simplificado:
-
-```
-UI (Screens) → Repos (TourRepo, ProgressRepo) → Supabase (DB, RPC, Storage)
-                 ↘ Isar (cache offline) ↙ Retry/Backoff
-```
+* **Pantalla en blanco / datos vacíos** → revisa `SUPABASE_URL` y `SUPABASE_ANON_KEY`; comprueba CORS en Supabase (Project Settings → API → Additional Settings → **CORS** para Web).
+* **403 en Storage** → políticas RLS de Storage no permiten lectura pública; ajusta políticas o usa URLs firmadas.
+* **Slugs duplicados** → asegura `unique` en `slug` y usa `slugify` al insertar/actualizar.
+* **“Missing plugin”** en iOS/Android → asegura `pod install` en iOS; en Android, sincroniza Gradle abriendo `/android` en Android Studio; corre `flutter clean`.
+* **Conflictos de schema** entre entornos → agrega tu SQL a `/supabase/migrations` y coordina cambios con PRs.
 
 ---
 
-## Front-End vs Back-End (responsabilidades)
-
-### Front-End (Flutter)
-
-* Pantallas: Home, Catálogo, Detalle de Tour (player de audio y progreso).
-* Estado: Riverpod (`Provider`, `ConsumerWidget`/`ConsumerStatefulWidget`).
-* Navegación: `go_router` (rutas estables `/`, `/catalog`, `/tour/:id`).
-* **NO** hace llamadas directas a Supabase: usa **Repos**.
-* Audio: `just_audio` + `audio_session` (pausa ante interrupciones/background y recuerda posición).
-
-### Back-End (Supabase)
-
-* **DB**: tablas `tours`, `stops`, `tour_i18n`, `stop_i18n`, `progress`, etc.
-* **RLS**: lectura pública de tours publicados; escrituras limitadas (progreso y RPC completions con auth).
-* **RPC**: `record_tour_completion(p_tour_id, p_duration_minutes)`.
-* **Storage**:
-
-  * Bucket público `avanti-public` (imágenes).
-  * Bucket privado `avanti-audio` (audios). Las URLs se **firman** desde el Repo.
-
-> Para detalles precisos de integración UI ↔ datos, ver **Contrato Front-End** (documento incluido en el repo/canvas).
-
----
-
-## Estructura de carpetas
+## 10) Estructura de carpetas (orientativa)
 
 ```
-lib/
-  core/
-    router.dart
-    theme.dart
-    config/app_keys.dart
-    logging/app_logger.dart
-    services/
-      file_cache_service.dart
-      retry.dart
-    ui/app_snack.dart
-    widgets/error_retry.dart
-  features/
-    home/
-      presentation/home_screen.dart
-    tours/
-      data/
-        models.dart
-        tour_repo.dart
-        caching_tour_repo.dart
-        progress_repo.dart
-      presentation/
-        catalog_screen.dart
-        tour_detail_screen.dart
-
-supabase/
-  schema.sql
-  seed.sql
-.github/
-  workflows/flutter-ci.yml
+root/
+  lib/
+    core/            # tema, utils, env loader
+    screen/          # pantallas (home, catalog, tour, etc.)
+    data/            # servicios y repositorios (Supabase)
+    widgets/         # UI reutilizable
+  assets/            # (si usas recursos locales)
+  supabase/
+    migrations/      # SQL versionado
+    seed.sql         # (opcional) datos de ejemplo
+  .env
+  pubspec.yaml
 ```
 
 ---
 
-## Estándares de código y CI
+## 11) Flujo de colaboración (resumen)
 
-* **Linter**: `flutter_lints` (mantener `flutter analyze` sin errores).
-* **Commits**: estilo *Conventional Commits* (sugerido):
+1. `git pull` en `main` → crea **rama feature**.
+2. Commits pequeños → **push** → **Pull Request**.
+3. Revisiones → merge → borrar rama.
 
-  * `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`, `ci:`
-* **PRs**: code review obligatorio, tests en verde.
-* **CI (GitHub Actions)**: `flutter-ci.yml` ejecuta analyze y tests. Secrets:
-
-  ```yaml
-  ```
-
-env:
-SUPABASE\_URL: \${{ secrets.SUPABASE\_URL }}
-SUPABASE\_ANON\_KEY: \${{ secrets.SUPABASE\_ANON\_KEY }}
-
-````
+> Los cambios de **Back End** (SQL, políticas, buckets) deben ir versionados en `/supabase/migrations` o documentados en PR.
 
 ---
 
-## Flujo de ramas (Git)
-- **main** → rama estable (producción/QA). Solo se mergea desde PRs revisados.
-- **develop** → integración continua de features (opcional si el equipo lo prefiere).
-- **feature/*** → nuevas funcionalidades (desde `develop` o `main` según estrategia).
-- **fix/*** → hotfixes/bugs.
-- **chore/***, **docs/*** → tareas de mantenimiento/documentación.
+## 12) Producción (muy breve)
 
-> Recomendado: PRs dirigidos a `develop`; se liberan a `main` con *release PR*.
-
----
-
-## Cómo contribuir (PRs)
-1. Crear rama: `git checkout -b feature/nombre-corto`.
-2. Hacer cambios + agregar tests si aplica.
-3. `dart format . && flutter analyze && flutter test`.
-4. Commit (convencional) y push.
-5. Abrir PR con descripción, screenshots (si UI) y checklist:
- - [ ] Sin errores de `analyze`
- - [ ] Tests en verde
- - [ ] No se rompieron rutas ni contratos de Repos
- - [ ] Cumple RLS/seguridad (nada de llamadas directas a DB desde UI)
-
----
-
-## Tests / QA
-- **Unit tests** estándar: `flutter test`
-- **Tests de seguridad RLS** (requieren env):
-```bash
-# PowerShell (Windows)
-$env:SUPABASE_URL="https://<ref>.supabase.co"
-$env:SUPABASE_ANON_KEY="<anon>"
-flutter test test/security/rls_client_test.dart
-````
-
-* **E2E manual**: catálogo online/offline, detalle de tour (audio y progreso), RLS (sin escrituras indebidas), player pausa en background/interrupciones.
-
----
-
-## Problemas comunes (Troubleshooting)
-
-* **Android licenses**: `flutter doctor --android-licenses` y acepta todo.
-* **Gradle fallas**: `flutter clean && flutter pub get` y reintentar.
-* **iOS pods**: `cd ios && pod install && cd ..`.
-* **RLS errores**: mensajes como *"row-level security policy"* u *"permission denied"* indican que intentaste una operación no permitida (ver Repos/Policies).
-* **Env no cargado**: comprueba `.env` y el uso de `flutter_dotenv` en `main`.
-
----
-
-## Contacto y soporte interno
-
-* Incidencias: abrir **Issue** en GitHub con template (bug/feature).
-* Dudas de datos/seguridad: mencionar al responsable de Back-End en el PR/Issue.
-* Diseño UI/UX: coordinar con el responsable de Front-End y revisar el **Contrato Front-End**.
-
----
-
-¡Gracias por contribuir a Avanti! Mantengamos la estabilidad (RLS), escalabilidad y DX con estos lineamientos. 🙌
+* Genera builds firmados (Android **.aab/.apk**, iOS **.ipa**).
+* Usa variables de entorno de **producción** (nuevo `.env` o `--dart-define`).
+* Verifica políticas de Storage y RLS para evitar filtraciones.
