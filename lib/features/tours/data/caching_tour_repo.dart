@@ -1,3 +1,4 @@
+// lib/features/tours/data/caching_tour_repo.dart
 import 'package:avanti/core/services/file_cache_service.dart';
 import 'package:avanti/core/services/retry.dart';
 import 'package:avanti/features/tours/data/models.dart';
@@ -8,7 +9,7 @@ class CachingTourRepo implements TourRepo {
   final FileCacheService cache;
 
   CachingTourRepo({required this.remote, FileCacheService? cache})
-    : cache = cache ?? const FileCacheService();
+      : cache = cache ?? FileCacheService(); // <- sin `const`
 
   @override
   Future<List<Tour>> listCatalog({int limit = 50}) {
@@ -50,7 +51,7 @@ class CachingTourRepo implements TourRepo {
       key: key,
       fetch: () => withRetry(
         () => remote.toursNearby(lat: lat, lon: lon, limit: limit),
-        maxAttempts: 2, // consultas por GPS normalmente cambian: caché corta
+        maxAttempts: 2, // ubicaciones cambian a menudo: caché corta
         baseDelay: const Duration(milliseconds: 400),
       ),
       encoder: (value) => value.map((t) => t.toJson()).toList(),
@@ -84,7 +85,7 @@ class CachingTourRepo implements TourRepo {
     String? audioPath, {
     int expiresSeconds = 600,
   }) {
-    // No tiene sentido cachear URLs firmadas (expiran).
+    // No cacheamos URLs firmadas (caducan).
     return withRetry(
       () => remote.signedAudioUrl(audioPath, expiresSeconds: expiresSeconds),
       maxAttempts: 2,

@@ -3,21 +3,11 @@ import 'dart:async';
 import 'package:audio_session/audio_session.dart';
 import 'package:avanti/core/logging/app_logger.dart';
 import 'package:avanti/core/ui/app_snack.dart';
+import 'package:avanti/di/providers.dart';
 import 'package:avanti/features/tours/data/models.dart';
-import 'package:avanti/features/tours/data/progress_repo.dart';
-import 'package:avanti/features/tours/data/tour_repo.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
-
-// Providers (puedes moverlos a un archivo común si lo prefieres)
-final tourRepoProvider = Provider<TourRepo>((_) => SupabaseTourRepo());
-final progressRepoProvider = Provider<ProgressRepo>(
-  (_) => SupabaseProgressRepo(),
-);
-
-// Idioma activo (simple). Más adelante lo conectamos a settings del usuario.
-final currentLangProvider = Provider<String>((_) => 'es');
 
 class TourDetailScreen extends ConsumerStatefulWidget {
   final String tourId;
@@ -31,19 +21,14 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen>
     with WidgetsBindingObserver {
   late final AudioPlayer _player;
 
-  // Control de estado de carga / parada actual
   bool _loadingAudio = false;
   String? _currentStopId;
 
-  // Guardamos el audio ya firmado para no pedirlo otra vez si se repite la parada
   String? _loadedAudioPath;
   String? _loadedSignedUrl;
 
-  // Para restaurar si hubo pausa por background/interrupción
-  bool _wasPlayingBeforeInterruption = false;
   Duration _savedPosition = Duration.zero;
 
-  // Suscripciones a eventos del sistema (audio focus / becoming noisy)
   StreamSubscription<AudioInterruptionEvent>? _interruptionSub;
   StreamSubscription<void>? _becomingNoisySub;
 
@@ -59,27 +44,19 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen>
 
     final lang = ref.read(currentLangProvider);
     _stopsFuture = ref
-        .read(tourRepoProvider)
-        .listStopsWithI18n(tourId: widget.tourId, lang: lang);
+        .read(stopsWithI18nProvider((tourId: widget.tourId, lang: lang)).future);
   }
 
   Future<void> _configureAudioSession() async {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.speech());
-    // Pausar si se desconectan auriculares / cambia la salida
     _becomingNoisySub = session.becomingNoisyEventStream.listen((_) async {
       AppLogger.i('Audio becoming noisy → pause');
       await _safePause();
     });
-    // Interrupciones (llamadas / otra app toma audio)
     _interruptionSub = session.interruptionEventStream.listen((event) async {
       if (event.begin) {
-        _wasPlayingBeforeInterruption = _player.playing;
-        AppLogger.w('Audio interrupted (begin): ${event.type}');
         await _safePause();
-      } else {
-        AppLogger.i('Audio interruption ended: ${event.type}');
-        // No reanudamos automáticamente; el usuario decide.
       }
     });
   }
@@ -94,7 +71,6 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen>
     super.dispose();
   }
 
-  // Pausa segura + guarda posición
   Future<void> _safePause() async {
     try {
       _savedPosition = _player.position;
@@ -105,7 +81,6 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen>
     }
   }
 
-  // Ciclo de vida de la app: pausamos en background
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive ||
@@ -120,7 +95,6 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen>
   }
 
   Future<void> _playStop(StopWithI18n s) async {
-    final repo = ref.read(tourRepoProvider);
     final audioPath = s.i18n?.audioPath;
 
     if (audioPath == null || audioPath.isEmpty) {
@@ -134,13 +108,12 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen>
     });
 
     try {
-      // Garantizamos no-nulo usando 'late final'
       late final String signedUrl;
 
       if (_loadedAudioPath == audioPath && _loadedSignedUrl != null) {
         signedUrl = _loadedSignedUrl!;
       } else {
-        final sUrl = await repo.signedAudioUrl(audioPath);
+        final sUrl = await ref.read(signedAudioUrlProvider(audioPath).future);
         if (sUrl == null || sUrl.isEmpty) {
           throw Exception('No se pudo firmar la URL del audio.');
         }
@@ -217,7 +190,6 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen>
       appBar: AppBar(
         title: const Text('Tour'),
         actions: [
-          // Botón Play/Pause global (para la parada actual)
           IconButton(
             tooltip: _player.playing ? 'Pausar' : 'Reproducir',
             icon: Icon(
@@ -225,9 +197,7 @@ class _TourDetailScreenState extends ConsumerState<TourDetailScreen>
                   ? Icons.pause_circle_filled_rounded
                   : Icons.play_circle_fill_rounded,
             ),
-            onPressed: (_loadedSignedUrl == null)
-                ? null // hasta que el usuario elija una parada
-                : _togglePlayPause,
+            onPressed: (_loadedSignedUrl == null) ? null : _togglePlayPause,
           ),
         ],
       ),

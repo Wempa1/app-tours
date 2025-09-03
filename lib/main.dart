@@ -1,32 +1,36 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'core/config/app_keys.dart';
-import 'core/config/supabase_client.dart';
-import 'core/logging/app_logger.dart';
-import 'core/router.dart';
-import 'core/theme.dart';
+// Deben existir en lib/core/ui/
+import 'core/ui/router.dart'; // exporta: final GoRouter appRouter = ...
+import 'core/ui/theme.dart';  // exporta: ThemeData buildTheme()/buildDarkTheme()
 
 Future<void> main() async {
-  // Captura global de errores de Flutter
-  FlutterError.onError = (FlutterErrorDetails details) {
-    FlutterError.dumpErrorToConsole(details);
-    AppLogger.e('FlutterError', details.exception, details.stack);
-  };
+  WidgetsFlutterBinding.ensureInitialized();
 
-  // Zona protegida para errores asíncronos no capturados
-  runZonedGuarded(
-    () async {
-      WidgetsFlutterBinding.ensureInitialized();
-      await AppSupabase.init();
-      runApp(const ProviderScope(child: AvantiApp()));
-    },
-    (error, stack) {
-      AppLogger.e('Uncaught zone error', error, stack);
-    },
-  );
+  // 1) Intentamos con --dart-define
+  var url = const String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+  var key = const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
+
+  // 2) Si no vienen, cargamos desde assets/.env
+  if (url.isEmpty || key.isEmpty) {
+    await dotenv.load(fileName: 'assets/.env');
+    url = dotenv.env['SUPABASE_URL'] ?? '';
+    key = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+  }
+
+  // 3) Validación en runtime (evita "No host specified in URI")
+  final isValid = url.startsWith('http') && key.isNotEmpty;
+  if (!isValid) {
+    runApp(const _ConfigErrorApp());
+    return;
+  }
+
+  await Supabase.initialize(url: url, anonKey: key);
+
+  runApp(const ProviderScope(child: AvantiApp()));
 }
 
 class AvantiApp extends StatelessWidget {
@@ -35,13 +39,39 @@ class AvantiApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
+      debugShowCheckedModeBanner: false,
       title: 'Avanti',
       theme: buildTheme(),
       darkTheme: buildDarkTheme(),
-      themeMode: ThemeMode.system,
       routerConfig: appRouter,
+    );
+  }
+}
+
+/// Pantalla de error de configuración (si faltan credenciales)
+class _ConfigErrorApp extends StatelessWidget {
+  const _ConfigErrorApp();
+
+  @override
+  Widget build(BuildContext context) {
+    return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      scaffoldMessengerKey: AppKeys.scaffoldMessenger, // <— Snackbars globales
+      home: Scaffold(
+        body: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.all(20),
+            child: Center(
+              child: Text(
+                'Faltan credenciales de Supabase.\n\n'
+                'Configura SUPABASE_URL y SUPABASE_ANON_KEY via --dart-define,\n'
+                'o crea assets/.env con:\n'
+                'SUPABASE_URL=...\nSUPABASE_ANON_KEY=...',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

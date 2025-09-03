@@ -1,87 +1,43 @@
-import 'package:avanti/core/logging/app_logger.dart';
-import 'package:avanti/core/widgets/error_retry.dart';
-import 'package:avanti/features/tours/data/caching_tour_repo.dart';
-import 'package:avanti/features/tours/data/models.dart';
-import 'package:avanti/features/tours/data/tour_repo.dart';
+import 'package:avanti/di/providers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-final tourRepoProvider = Provider<TourRepo>(
-  (ref) => CachingTourRepo(remote: SupabaseTourRepo()),
-);
-
-class CatalogScreen extends ConsumerStatefulWidget {
+class CatalogScreen extends ConsumerWidget {
   const CatalogScreen({super.key});
-  @override
-  ConsumerState<CatalogScreen> createState() => _CatalogScreenState();
-}
-
-class _CatalogScreenState extends ConsumerState<CatalogScreen> {
-  late Future<List<Tour>> _future;
 
   @override
-  void initState() {
-    super.initState();
-    _future = ref.read(tourRepoProvider).listCatalog();
-  }
+  Widget build(BuildContext context, WidgetRef ref) {
+    final asyncCatalog = ref.watch(catalogProvider);
 
-  Future<void> _onRefresh() async {
-    setState(() {
-      _future = ref.read(tourRepoProvider).listCatalog();
-    });
-    await _future.catchError((_) {});
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Catalog')),
-      body: RefreshIndicator(
-        onRefresh: _onRefresh,
-        child: FutureBuilder<List<Tour>>(
-          future: _future,
-          builder: (context, snap) {
-            if (snap.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snap.hasError) {
-              AppLogger.e('Catalog error', snap.error);
-              return ErrorRetry(
-                message: 'No pudimos cargar el catálogo.',
-                onRetry: _onRefresh,
+      body: asyncCatalog.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, st) => Center(child: Text('Error: $e')),
+        data: (items) {
+          if (items.isEmpty) {
+            return const Center(child: Text('No tours yet.'));
+          }
+          return GridView.builder(
+            padding: const EdgeInsets.all(12),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: .78),
+            itemCount: items.length,
+            itemBuilder: (context, i) {
+              final t = items[i];
+              final duration = t.durationMinutes ?? 0;
+              return _TourCard(
+                title: t.title,
+                city: t.city ?? '',
+                duration: duration,
+                cover: t.coverUrl ?? '',
+                onTap: () => context.push('/tour/${t.id}'),
               );
-            }
-
-            final items = snap.data ?? const <Tour>[];
-            if (items.isEmpty) {
-              return const Center(child: Text('No tours yet.'));
-            }
-
-            return GridView.builder(
-              padding: const EdgeInsets.all(12),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: .78,
-              ),
-              itemCount: items.length,
-              itemBuilder: (context, i) {
-                final t = items[i];
-                final duration = t.durationMinutes ?? 0;
-                return _TourCard(
-                  title: t.title,
-                  city: t.city ?? '',
-                  duration: duration,
-                  cover: t.coverUrl ?? '',
-                  onTap: () => context.push('/tour/${t.id}'),
-                );
-              },
-            );
-          },
-        ),
+            },
+          );
+        },
       ),
     );
   }
@@ -122,49 +78,36 @@ class _TourCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(14),
-              ),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
               child: AspectRatio(
-                aspectRatio: 16 / 10,
+                aspectRatio: 16/10,
                 child: cover.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: cover,
-                        fit: BoxFit.cover,
-                        errorWidget: (_, __, ___) => _fallback(),
-                        placeholder: (_, __) => _loader(),
-                      )
-                    : _fallback(),
+                  ? CachedNetworkImage(
+                      imageUrl: cover,
+                      fit: BoxFit.cover,
+                      errorWidget: (_, __, ___) => _fallback(),
+                      placeholder: (_, __) => _loader(),
+                    )
+                  : _fallback(),
               ),
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                padding: const EdgeInsets.fromLTRB(10,8,10,8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
+                    Text(title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 4),
-                    Text(
-                      city,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.black54),
-                    ),
+                    Text(city, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.black54)),
                     const Spacer(),
                     Row(
                       children: [
                         const Icon(Icons.schedule, size: 16),
                         const SizedBox(width: 4),
-                        Text(
-                          '$duration min',
-                          style: const TextStyle(fontSize: 12),
-                        ),
+                        Text('$duration min', style: const TextStyle(fontSize: 12)),
                         const Spacer(),
                       ],
                     ),

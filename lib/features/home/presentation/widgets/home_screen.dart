@@ -2,17 +2,11 @@ import 'package:avanti/core/logging/app_logger.dart';
 import 'package:avanti/core/services/location_service.dart';
 import 'package:avanti/core/ui/app_snack.dart';
 import 'package:avanti/core/widgets/error_retry.dart';
-import 'package:avanti/features/tours/data/caching_tour_repo.dart';
+import 'package:avanti/di/providers.dart';
 import 'package:avanti/features/tours/data/models.dart';
-import 'package:avanti/features/tours/data/tour_repo.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
-final tourRepoProvider = Provider<TourRepo>(
-  (ref) => CachingTourRepo(remote: SupabaseTourRepo()),
-);
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -21,7 +15,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  final _sb = Supabase.instance.client;
   final _heroCtrl = PageController(viewportFraction: 0.92);
   final _heroIndex = ValueNotifier(0);
 
@@ -36,7 +29,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   void _loadAll() {
     _toursFuture = _loadToursNearbyOrDefault();
-    _statsFuture = _loadStats();
+    _statsFuture = ref.read(userStatsProvider.future).then((s) => _StatsVM(
+          completedTours: s.completedTours,
+          rewardStars0to9: s.rewardStars0to9,
+          walkedKm: s.walkedKm,
+        ));
   }
 
   @override
@@ -52,11 +49,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final loc = ref.read(locationServiceProvider);
       final pos = await loc.currentPositionOrNull();
       if (pos != null) {
-        final nearby = await repo.toursNearby(
-          lat: pos.latitude,
-          lon: pos.longitude,
-          limit: 12,
-        );
+        final nearby =
+            await repo.toursNearby(lat: pos.latitude, lon: pos.longitude, limit: 12);
         if (nearby.isNotEmpty) {
           AppLogger.i('Nearby tours: ${nearby.length}');
           return nearby;
@@ -71,33 +65,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return cat;
   }
 
-  Future<_StatsVM> _loadStats() async {
-    final userId = _sb.auth.currentUser?.id;
-    if (userId == null) return _StatsVM.zero();
-
-    try {
-      final row = await _sb
-          .from('user_stats_v')
-          .select()
-          .eq('user_id', userId)
-          .maybeSingle();
-      if (row == null) return _StatsVM.zero();
-      return _StatsVM(
-        completedTours: (row['completed_tours'] as num?)?.toInt() ?? 0,
-        rewardStars0to9: (row['reward_stars'] as num?)?.toInt() ?? 0,
-        walkedKm: (row['walked_km'] as num?)?.toDouble() ?? 0.0,
-      );
-    } catch (e, st) {
-      AppLogger.w('user_stats_v failed', e, st);
-      return _StatsVM.zero();
-    }
-  }
-
   Future<void> _onRefresh() async {
     setState(_loadAll);
     await Future.wait([
-      _toursFuture.catchError((_) {}),
-      _statsFuture.catchError((_) {}),
+      _toursFuture.catchError((_) => <Tour>[]),
+      _statsFuture.catchError((_) => _StatsVM.zero()),
     ]);
   }
 
@@ -114,7 +86,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             SliverAppBar(
               floating: true,
               snap: true,
-              automaticallyImplyLeading: false,
+              automaticallyImplyLeading: false, // <- nombre correcto
               toolbarHeight: 64,
               titleSpacing: 20,
               title: Text(
@@ -125,6 +97,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ),
 
+            // HERO
             SliverToBoxAdapter(
               child: FutureBuilder<List<Tour>>(
                 future: _toursFuture,
@@ -179,9 +152,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               return Container(
                                 width: active ? 10 : 8,
                                 height: active ? 10 : 8,
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
+                                margin: const EdgeInsets.symmetric(horizontal: 4),
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: active
@@ -200,6 +171,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ),
 
+            // STATS
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
@@ -228,9 +200,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           AppLogger.e('Stats error', snap.error);
                           return ErrorRetry(
                             message: 'No pudimos cargar tus estadísticas.',
-                            onRetry: () => setState(() {
-                              _statsFuture = _loadStats();
-                            }),
+                            onRetry: () => setState(_loadAll),
                           );
                         }
                         final s = snap.data ?? _StatsVM.zero();
@@ -248,14 +218,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _emptyHero(BuildContext context) => Container(
-    height: 220,
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surface,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: Colors.black.withOpacity(0.06)),
-    ),
-    child: const Center(child: Text('No tours yet')),
-  );
+        height: 220,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.black.withOpacity(0.06)),
+        ),
+        child: const Center(child: Text('No tours yet')),
+      );
 
   Widget _heroCard(BuildContext context, Tour t) {
     final theme = Theme.of(context);
@@ -311,11 +281,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(
-                              Icons.star_rounded,
-                              color: Colors.white,
-                              size: 18,
-                            ),
+                            const Icon(Icons.star_rounded,
+                                color: Colors.white, size: 18),
                             const SizedBox(width: 6),
                             Text(
                               rating.toStringAsFixed(1),
@@ -360,7 +327,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
 class _StatsVM {
   final int completedTours;
-  final int rewardStars0to9;
+  final int rewardStars0to9; // 0..9
   final double walkedKm;
   const _StatsVM({
     required this.completedTours,
@@ -431,9 +398,8 @@ class _StatCard extends StatelessWidget {
         children: [
           Text(
             title,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+            style:
+                theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),
@@ -453,9 +419,10 @@ class _BigValue extends StatelessWidget {
     return Text(
       value,
       textAlign: TextAlign.center,
-      style: Theme.of(
-        context,
-      ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+      style: Theme.of(context)
+          .textTheme
+          .headlineSmall
+          ?.copyWith(fontWeight: FontWeight.w800),
     );
   }
 }

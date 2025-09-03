@@ -1,3 +1,4 @@
+// lib/features/tours/data/progress_repo.dart
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class TourProgress {
@@ -14,11 +15,11 @@ class TourProgress {
   });
 
   factory TourProgress.fromJson(Map<String, dynamic> j) => TourProgress(
-    userId: j['user_id'] as String,
-    tourId: j['tour_id'] as String,
-    completedStops: (j['completed_stops'] as num?)?.toInt() ?? 0,
-    lastStopId: j['last_stop_id'] as String?,
-  );
+        userId: j['user_id'] as String,
+        tourId: j['tour_id'] as String,
+        completedStops: (j['completed_stops'] as num?)?.toInt() ?? 0,
+        lastStopId: j['last_stop_id'] as String?,
+      );
 }
 
 abstract class ProgressRepo {
@@ -44,12 +45,14 @@ class SupabaseProgressRepo implements ProgressRepo {
 
   @override
   Future<TourProgress?> getProgress(String tourId) async {
-    _requireUser();
+    final uid = _requireUser();
     final row = await _db
         .from('progress')
         .select()
         .eq('tour_id', tourId)
+        .eq('user_id', uid) // <-- filtro por usuario para RLS/consistencia
         .maybeSingle();
+
     if (row == null) return null;
     return TourProgress.fromJson(Map<String, dynamic>.from(row));
   }
@@ -61,23 +64,28 @@ class SupabaseProgressRepo implements ProgressRepo {
     required int completedStops,
   }) async {
     final uid = _requireUser();
+
     final data = {
       'user_id': uid,
       'tour_id': tourId,
       'last_stop_id': lastStopId,
       'completed_stops': completedStops,
     };
-    final rows = await _db.from('progress').upsert(data).select().maybeSingle();
-    if (rows == null) {
-      // si el upsert no devuelve fila, pedimos el estado actual
+
+    // Si existe PK/unique (user_id, tour_id), Supabase hará upsert correctamente.
+    final row = await _db.from('progress').upsert(data).select().maybeSingle();
+
+    if (row == null) {
+      // Si no devolvió fila (poco común), pedimos el estado actual como fallback.
       return (await getProgress(tourId)) ??
           TourProgress(
             userId: uid,
             tourId: tourId,
             completedStops: completedStops,
+            lastStopId: lastStopId,
           );
     }
-    return TourProgress.fromJson(Map<String, dynamic>.from(rows));
+    return TourProgress.fromJson(Map<String, dynamic>.from(row));
   }
 
   @override
@@ -86,10 +94,13 @@ class SupabaseProgressRepo implements ProgressRepo {
     int? durationMinutes,
   }) async {
     _requireUser();
-    // Usa tu función SQL SECURITY DEFINER: record_tour_completion(p_tour_id, p_duration_minutes)
+    // SECURITY DEFINER: record_tour_completion(p_tour_id, p_duration_minutes)
     await _db.rpc(
       'record_tour_completion',
-      params: {'p_tour_id': tourId, 'p_duration_minutes': durationMinutes},
+      params: {
+        'p_tour_id': tourId,
+        'p_duration_minutes': durationMinutes,
+      },
     );
   }
 }

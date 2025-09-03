@@ -30,7 +30,7 @@ dependencies:
 
   # --- Descargas / Almacenamiento local ---
   dio: ^5.7.0
-  crypto: ^3.0.3
+  crypto: ^3.0.6
   path_provider: ^2.1.5
   isar: ^3.1.0+1
   just_audio: ^0.10.4
