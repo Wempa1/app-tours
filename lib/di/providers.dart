@@ -1,11 +1,16 @@
+// lib/di/providers.dart
 // Repos y providers compartidos para la UI (Riverpod)
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:avanti/features/auth/data/auth_repo.dart';
 import 'package:avanti/features/tours/data/caching_tour_repo.dart';
 import 'package:avanti/features/tours/data/models.dart';
 import 'package:avanti/features/tours/data/progress_repo.dart';
 import 'package:avanti/features/tours/data/tour_repo.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
+
+// OJO: mantenemos Supabase aquí SOLO para userStatsProvider.
+// Si luego quieres separación 100% FE/BE, movemos esto a un UserStatsRepo en features/user/data/.
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ---------------- Repos (BE detrás de interfaces) ----------------
@@ -16,6 +21,11 @@ final tourRepoProvider = Provider<TourRepo>(
 
 final progressRepoProvider = Provider<ProgressRepo>(
   (ref) => SupabaseProgressRepo(),
+);
+
+// Auth repo (frontera FE/BE endurecida)
+final authRepoProvider = Provider<AuthRepo>(
+  (ref) => SupabaseAuthRepo(),
 );
 
 // ---------------- Catálogo ----------------
@@ -52,7 +62,7 @@ final signedAudioUrlProvider =
 
 // ---------------- User Stats (view user_stats_v) ----------------
 // Nota: Esto toca Supabase directamente.
-// Para separación estricta FE/BE, podemos crear un UserStatsRepo.
+// Para separación 100% FE/BE, crear un UserStatsRepo y mover la lógica allí.
 
 typedef UserStats = ({
   int completedTours,
@@ -65,7 +75,6 @@ final userStatsProvider = FutureProvider.autoDispose<UserStats>((ref) async {
   final userId = client.auth.currentUser?.id;
   if (userId == null) {
     return (completedTours: 0, rewardStars0to9: 0, walkedKm: 0.0);
-    // Usuario no autenticado -> stats en cero
   }
 
   try {
@@ -89,17 +98,19 @@ final userStatsProvider = FutureProvider.autoDispose<UserStats>((ref) async {
     return (completedTours: 0, rewardStars0to9: 0, walkedKm: 0.0);
   }
 });
-// === Auth providers (frontera FE/BE) =========================
 
+// ---------------- Auth (expuesto a la UI vía repo) ----------------
 
-/// Email del usuario autenticado (o null)
-final currentUserEmailProvider = Provider<String?>((ref) {
-  return Supabase.instance.client.auth.currentUser?.email;
+/// Email del usuario autenticado (o null) como FutureProvider,
+/// para que la UI pueda usar `.when(...)`.
+final currentUserEmailProvider =
+    FutureProvider.autoDispose<String?>((ref) async {
+  final repo = ref.watch(authRepoProvider);
+  return repo.currentEmail();
 });
 
-/// Acción de sign out expuesta como función
-final signOutProvider = Provider<Future<void> Function()>((ref) {
-  return () async {
-    await Supabase.instance.client.auth.signOut();
-  };
+/// Acción de sign out como FutureProvider: en UI se usa `ref.read(signOutProvider.future)`.
+final signOutProvider = FutureProvider.autoDispose<void>((ref) async {
+  final repo = ref.watch(authRepoProvider);
+  await repo.signOut();
 });

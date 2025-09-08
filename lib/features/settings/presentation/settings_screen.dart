@@ -1,41 +1,263 @@
+// lib/features/settings/presentation/settings_screen.dart
+import 'package:avanti/di/providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:avanti/di/providers.dart'; // currentUserEmailProvider, signOutProvider
+import 'package:geolocator/geolocator.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
-  Future<void> _signOut(BuildContext context, WidgetRef ref) async {
-    // Evita use_build_context_synchronously capturando el messenger antes del await
+  Future<void> _openGeneralSettings(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
-    final doSignOut = ref.read(signOutProvider);
-    await doSignOut();
-    messenger.showSnackBar(const SnackBar(content: Text('Signed out')));
-    // Si tienes pantalla de login, aquí podrías navegar:
-    // context.go('/login');
+    final ok = await Geolocator.openAppSettings();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(ok ? 'Abriendo ajustes…' : 'No se pudo abrir ajustes'),
+      ),
+    );
+  }
+
+  Future<void> _openLocationSettings(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await Geolocator.openLocationSettings();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          ok ? 'Abriendo ajustes de ubicación…' : 'No se pudo abrir ajustes de ubicación',
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final email = ref.watch(currentUserEmailProvider);
+    final emailAsync = ref.watch(currentUserEmailProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
-      body: Padding(
+      body: ListView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            ListTile(
+        children: [
+          // Cabecera: email del usuario
+          emailAsync.when(
+            data: (email) => ListTile(
               leading: const Icon(Icons.alternate_email),
               title: const Text('Email'),
               subtitle: Text(email ?? '-'),
             ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
+            loading: () => const ListTile(
+              leading: Icon(Icons.alternate_email),
+              title: Text('Email'),
+              subtitle: Text('Cargando…'),
+            ),
+            error: (_, __) => const ListTile(
+              leading: Icon(Icons.alternate_email),
+              title: Text('Email'),
+              subtitle: Text('—'),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+          const Divider(),
+
+          const SizedBox(height: 8),
+          // Lista de opciones
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 4),
+            child: Text(
+              'Opciones',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+
+          // Cuenta
+          ListTile(
+            leading: const Icon(Icons.person_outline),
+            title: const Text('Cuenta'),
+            subtitle: const Text('Datos personales y seguridad'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const _AccountScreen()),
+              );
+            },
+          ),
+
+          // Historial de Tours
+          ListTile(
+            leading: const Icon(Icons.history),
+            title: const Text('Historial de Tours'),
+            subtitle: const Text('Tours completados y progreso'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const _HistoryScreen()),
+              );
+            },
+          ),
+
+          // Métodos de pago
+          ListTile(
+            leading: const Icon(Icons.credit_card),
+            title: const Text('Métodos de Pago'),
+            subtitle: const Text('Tarjetas y facturación'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const _PaymentsScreen()),
+              );
+            },
+          ),
+
+          // Permisos
+          ListTile(
+            leading: const Icon(Icons.privacy_tip_outlined),
+            title: const Text('Permisos'),
+            subtitle: const Text(
+              'Reestablece permisos si fueron denegados',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const _PermissionsScreen()),
+              );
+            },
+          ),
+
+          // Configuración
+          ListTile(
+            leading: const Icon(Icons.settings_outlined),
+            title: const Text('Configuración'),
+            subtitle: const Text('Preferencias de la aplicación'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const _PreferencesScreen()),
+              );
+            },
+          ),
+
+          const SizedBox(height: 24),
+
+          // Botón de Cerrar sesión centrado
+          Center(
+            child: FilledButton.icon(
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                try {
+                  await ref.read(signOutProvider.future);
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('Signed out')),
+                  );
+                } catch (e) {
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('No pudimos cerrar sesión. Intenta de nuevo.'),
+                    ),
+                  );
+                }
+              },
               icon: const Icon(Icons.logout),
-              label: const Text('Sign out'),
-              onPressed: () => _signOut(context, ref),
+              label: const Text('Cerrar sesión'),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+        ],
+      ),
+    );
+  }
+}
+
+// ----------------------------------------------
+// Pantallas placeholder para cada sección
+// ----------------------------------------------
+
+class _AccountScreen extends StatelessWidget {
+  const _AccountScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Cuenta')),
+      body: const Center(child: Text('Pantalla de Cuenta (pendiente de implementar)')),
+    );
+  }
+}
+
+class _HistoryScreen extends StatelessWidget {
+  const _HistoryScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Historial de Tours')),
+      body: const Center(child: Text('Pantalla de Historial (pendiente de implementar)')),
+    );
+  }
+}
+
+class _PaymentsScreen extends StatelessWidget {
+  const _PaymentsScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Métodos de Pago')),
+      body: const Center(child: Text('Pantalla de Pagos (pendiente de implementar)')),
+    );
+  }
+}
+
+class _PreferencesScreen extends StatelessWidget {
+  const _PreferencesScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Configuración')),
+      body: const Center(child: Text('Pantalla de Configuración (pendiente de implementar)')),
+    );
+  }
+}
+
+class _PermissionsScreen extends StatelessWidget {
+  const _PermissionsScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Permisos')),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            const ListTile(
+              leading: Icon(Icons.info_outline),
+              title: Text('Permisos de la aplicación'),
+              subtitle: Text(
+                'Si negaste un permiso, puedes habilitarlo desde los ajustes del dispositivo.',
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => Geolocator.openAppSettings(),
+                    icon: const Icon(Icons.settings),
+                    label: const Text('Abrir Ajustes'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => Geolocator.openLocationSettings(),
+                    icon: const Icon(Icons.location_on_outlined),
+                    label: const Text('Ubicación'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
