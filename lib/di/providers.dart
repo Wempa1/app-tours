@@ -114,3 +114,11 @@ final signOutProvider = FutureProvider.autoDispose<void>((ref) async {
   final repo = ref.watch(authRepoProvider);
   await repo.signOut();
 });
+
+/// Enviar correo de restablecimiento de contraseña.
+/// Si pasas `null`, usa el email del usuario actual.
+final passwordResetProvider =
+    FutureProvider.autoDispose.family<void, String?>((ref, email) async {
+  final repo = ref.watch(authRepoProvider);
+  await repo.sendPasswordResetEmail(email: email);
+});
