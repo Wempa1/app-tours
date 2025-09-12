@@ -1,18 +1,35 @@
 // lib/features/settings/presentation/settings_screen.dart
 
+import 'package:avanti/di/providers.dart';
+import 'package:avanti/features/settings/account/account_screen.dart';
+import 'package:avanti/features/settings/history/history_screen.dart';
+import 'package:avanti/features/settings/payments/payment_methods_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
-
-import 'package:avanti/di/providers.dart';
-import 'package:avanti/features/settings/account/account_screen.dart';
+import 'package:go_router/go_router.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
+  Future<void> _handleSignOut(BuildContext context, WidgetRef ref) async {
+    try {
+      await ref.read(signOutProvider.future);
+      if (!context.mounted) return;
+      // Redirige a la pantalla de autenticación
+      context.go('/auth');
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No pudimos cerrar sesión. Intenta de nuevo.'),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Como es FutureProvider<String?>, obtenemos un AsyncValue<String?>
     final emailAsync = ref.watch(currentUserEmailProvider);
 
     return Scaffold(
@@ -20,12 +37,12 @@ class SettingsScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Cabecera: email del usuario (usa .when de AsyncValue)
+          // Cabecera: email del usuario
           emailAsync.when(
             data: (email) => ListTile(
               leading: const Icon(Icons.alternate_email),
               title: const Text('Email'),
-              subtitle: Text(email ?? '—'),
+              subtitle: Text(email ?? '-'),
             ),
             loading: () => const ListTile(
               leading: Icon(Icons.alternate_email),
@@ -58,9 +75,11 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('Cuenta'),
             subtitle: const Text('Datos personales y seguridad'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const AccountScreen()),
-            ),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AccountScreen()),
+              );
+            },
           ),
 
           // Historial de Tours
@@ -71,7 +90,7 @@ class SettingsScreen extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const _HistoryScreen()),
+                MaterialPageRoute(builder: (_) => const HistoryScreen()),
               );
             },
           ),
@@ -84,7 +103,7 @@ class SettingsScreen extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const _PaymentsScreen()),
+                MaterialPageRoute(builder: (_) => const PaymentMethodsScreen()),
               );
             },
           ),
@@ -120,35 +139,7 @@ class SettingsScreen extends ConsumerWidget {
           // Botón de Cerrar sesión centrado
           Center(
             child: FilledButton.icon(
-              onPressed: () async {
-                final messenger = ScaffoldMessenger.of(context);
-                try {
-                  // Soporta ambas variantes: Provider<Future<void> Function()>
-                  // o, si cambiara por error, FutureProvider<void>.
-                  final dynamic signOutAny = ref.read(signOutProvider);
-                  if (signOutAny is Future<void> Function()) {
-                    await signOutAny();
-                  } else if (signOutAny is Future<void>) {
-                    await signOutAny;
-                  } else {
-                    // Fallback: usa el repo directamente
-                    await ref.read(authRepoProvider).signOut();
-                  }
-
-                  if (!context.mounted) return;
-                  messenger.showSnackBar(
-                    const SnackBar(content: Text('Signed out')),
-                  );
-                } catch (_) {
-                  if (!context.mounted) return;
-                  messenger.showSnackBar(
-                    const SnackBar(
-                      content:
-                          Text('No pudimos cerrar sesión. Intenta de nuevo.'),
-                    ),
-                  );
-                }
-              },
+              onPressed: () => _handleSignOut(context, ref),
               icon: const Icon(Icons.logout),
               label: const Text('Cerrar sesión'),
             ),
@@ -162,36 +153,9 @@ class SettingsScreen extends ConsumerWidget {
 }
 
 // ----------------------------------------------
-// Pantallas placeholder para cada sección
+// Pantallas placeholder para secciones aún no implementadas
+// (Nota: Eliminado _PaymentMethodsScreen porque ya existe PaymentMethodsScreen real)
 // ----------------------------------------------
-
-class _HistoryScreen extends StatelessWidget {
-  const _HistoryScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Historial de Tours')),
-      body: const Center(
-        child: Text('Pantalla de Historial (pendiente de implementar)'),
-      ),
-    );
-  }
-}
-
-class _PaymentsScreen extends StatelessWidget {
-  const _PaymentsScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Métodos de Pago')),
-      body: const Center(
-        child: Text('Pantalla de Pagos (pendiente de implementar)'),
-      ),
-    );
-  }
-}
 
 class _PreferencesScreen extends StatelessWidget {
   const _PreferencesScreen();
@@ -209,6 +173,26 @@ class _PreferencesScreen extends StatelessWidget {
 
 class _PermissionsScreen extends StatelessWidget {
   const _PermissionsScreen();
+
+  Future<void> _openAppSettings(BuildContext context) async {
+    final ok = await Geolocator.openAppSettings();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(ok ? 'Abriendo ajustes…' : 'No se pudo abrir ajustes')),
+    );
+  }
+
+  Future<void> _openLocationSettings(BuildContext context) async {
+    final ok = await Geolocator.openLocationSettings();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok ? 'Abriendo ajustes de ubicación…' : 'No se pudo abrir ajustes de ubicación',
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -230,39 +214,15 @@ class _PermissionsScreen extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () async {
-                      final ok = await Geolocator.openAppSettings();
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            ok
-                                ? 'Abriendo ajustes…'
-                                : 'No se pudo abrir ajustes',
-                          ),
-                        ),
-                      );
-                    },
+                    onPressed: () => _openAppSettings(context),
                     icon: const Icon(Icons.settings),
-                    label: const Text('Ajustes'),
+                    label: const Text('Abrir Ajustes'),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () async {
-                      final ok = await Geolocator.openLocationSettings();
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            ok
-                                ? 'Abriendo ajustes de ubicación…'
-                                : 'No se pudo abrir ajustes de ubicación',
-                          ),
-                        ),
-                      );
-                    },
+                    onPressed: () => _openLocationSettings(context),
                     icon: const Icon(Icons.location_on_outlined),
                     label: const Text('Ubicación'),
                   ),

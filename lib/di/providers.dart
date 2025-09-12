@@ -3,11 +3,22 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+// Auth (repos separados FE/BE)
 import 'package:avanti/features/auth/data/auth_repo.dart';
+
+// Tours (repos y modelos)
 import 'package:avanti/features/tours/data/caching_tour_repo.dart';
 import 'package:avanti/features/tours/data/models.dart';
 import 'package:avanti/features/tours/data/progress_repo.dart';
 import 'package:avanti/features/tours/data/tour_repo.dart';
+
+// Historial
+import 'package:avanti/features/history/data/history_models.dart';
+import 'package:avanti/features/history/data/history_repo.dart';
+
+//Pagos
+import 'package:avanti/features/payments/data/payment_models.dart';
+import 'package:avanti/features/payments/data/payment_repo.dart';
 
 // OJO: mantenemos Supabase aquí SOLO para userStatsProvider.
 // Si luego quieres separación 100% FE/BE, movemos esto a un UserStatsRepo en features/user/data/.
@@ -23,9 +34,14 @@ final progressRepoProvider = Provider<ProgressRepo>(
   (ref) => SupabaseProgressRepo(),
 );
 
-// Auth repo (frontera FE/BE endurecida)
+// Auth repo (frontera FE/BE)
 final authRepoProvider = Provider<AuthRepo>(
   (ref) => SupabaseAuthRepo(),
+);
+
+// Historial repo
+final historyRepoProvider = Provider<HistoryRepo>(
+  (ref) => SupabaseHistoryRepo(),
 );
 
 // ---------------- Catálogo ----------------
@@ -122,3 +138,24 @@ final passwordResetProvider =
   final repo = ref.watch(authRepoProvider);
   await repo.sendPasswordResetEmail(email: email);
 });
+
+// ================== Historial de Tours ========================
+
+final tourHistoryProvider =
+    FutureProvider.autoDispose<List<TourHistoryEntry>>((ref) async {
+  final repo = ref.watch(historyRepoProvider);
+  return repo.listUserHistory(limit: 200);
+});
+
+// ================== Payments ===============================
+final paymentRepoProvider = Provider<PaymentRepo>(
+  (ref) => SupabasePaymentRepo(),
+);
+
+final paymentMethodsProvider =
+    FutureProvider.autoDispose<List<PaymentMethod>>((ref) async {
+  final repo = ref.watch(paymentRepoProvider);
+  return repo.list();
+});
+
+
