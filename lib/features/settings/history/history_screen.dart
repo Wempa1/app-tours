@@ -85,7 +85,7 @@ class _HistoryTile extends StatelessWidget {
         '${_two(d.day)}/${_two(d.month)}/${d.year} ${_two(d.hour)}:${_two(d.minute)}';
     final dur = e.durationMinutes;
     if (dur == null) return 'Completado: $formatted';
-    return 'Completado: $formatted · ${dur} min';
+    return 'Completado: $formatted · $dur min';
   }
 
   String _two(int n) => n < 10 ? '0$n' : '$n';

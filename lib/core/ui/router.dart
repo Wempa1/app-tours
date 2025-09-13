@@ -1,16 +1,14 @@
 // lib/core/ui/router.dart
 import 'dart:async';
 
+import 'package:avanti/features/auth/presentation/login_screen.dart';
+import 'package:avanti/features/shell/presentation/widgets/av_bottom_nav.dart';
+import 'package:avanti/features/tours/presentation/tour_detail_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'package:avanti/features/auth/presentation/login_screen.dart';
-import 'package:avanti/features/shell/presentation/widgets/av_bottom_nav.dart';
-import 'package:avanti/features/tours/presentation/tour_detail_screen.dart';
-
 /// Notificador que hace que GoRouter se "refresque" cuando cambia el estado de auth.
-/// Escucha onAuthStateChange y llama a notifyListeners().
 class _AuthStateNotifier extends ChangeNotifier {
   late final StreamSubscription<AuthState> _sub;
 
@@ -30,6 +28,13 @@ class _AuthStateNotifier extends ChangeNotifier {
 // Instancia única para toda la app.
 final _authNotifier = _AuthStateNotifier();
 
+String _stripTrailingSlash(String path) {
+  if (path.length > 1 && path.endsWith('/')) {
+    return path.substring(0, path.length - 1);
+  }
+  return path;
+}
+
 /// Router de la app con redirección según sesión:
 /// - Si NO hay sesión  -> /auth
 /// - Si hay sesión     -> /home
@@ -37,29 +42,34 @@ final appRouter = GoRouter(
   initialLocation: '/auth',
   refreshListenable: _authNotifier,
   redirect: (context, state) {
-    final isLoggedIn = Supabase.instance.client.auth.currentSession != null;
-    final loggingIn = state.matchedLocation == '/auth';
+    // Normaliza trailing slash para evitar variantes como '/home/'
+    final loc = _stripTrailingSlash(state.matchedLocation);
+    if (loc != state.matchedLocation) return loc;
 
-    // No autenticado: permite solo /auth
-    if (!isLoggedIn) {
-      return loggingIn ? null : '/auth';
+    final hasSession = Supabase.instance.client.auth.currentSession != null;
+    final atAuth = loc == '/auth';
+
+    // No autenticado: solo permitimos /auth
+    if (!hasSession) {
+      return atAuth ? null : '/auth';
     }
 
-    // Autenticado: si está en /auth, envía a /home
-    if (loggingIn) return '/home';
+    // Autenticado: si está en /auth, lo enviamos a /home
+    if (hasSession && atAuth) return '/home';
 
-    // En cualquier otra ruta, no redirigir.
+    // No redirigir en otros casos
     return null;
   },
   routes: [
-    // Auth
+    // -------- Auth (sin bottom bar)
     GoRoute(
       path: '/auth',
       name: 'auth',
       builder: (_, __) => const LoginScreen(),
     ),
 
-    // Home (alias en "/" y en "/home" para evitar errores de rutas inexistentes)
+    // -------- Tabs con bottom bar (todas construyen AvBottomNav)
+    // Alias raíz por si alguien navega a "/"
     GoRoute(
       path: '/',
       name: 'root',
@@ -70,8 +80,6 @@ final appRouter = GoRouter(
       name: 'home',
       builder: (_, __) => const AvBottomNav(initialIndex: 0),
     ),
-
-    // Tabs directas
     GoRoute(
       path: '/catalog',
       name: 'catalog',
@@ -88,7 +96,7 @@ final appRouter = GoRouter(
       builder: (_, __) => const AvBottomNav(initialIndex: 3),
     ),
 
-    // Detalle de tour (sin bottom bar)
+    // -------- Detalle (sin bottom bar)
     GoRoute(
       path: '/tour/:id',
       name: 'tourDetail',

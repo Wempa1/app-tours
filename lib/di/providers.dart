@@ -1,25 +1,20 @@
 // lib/di/providers.dart
 // Repos y providers compartidos para la UI (Riverpod)
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 // Auth (repos separados FE/BE)
 import 'package:avanti/features/auth/data/auth_repo.dart';
-
+// Historial
+import 'package:avanti/features/history/data/history_models.dart';
+import 'package:avanti/features/history/data/history_repo.dart';
+//Pagos
+import 'package:avanti/features/payments/data/payment_models.dart';
+import 'package:avanti/features/payments/data/payment_repo.dart';
 // Tours (repos y modelos)
 import 'package:avanti/features/tours/data/caching_tour_repo.dart';
 import 'package:avanti/features/tours/data/models.dart';
 import 'package:avanti/features/tours/data/progress_repo.dart';
 import 'package:avanti/features/tours/data/tour_repo.dart';
-
-// Historial
-import 'package:avanti/features/history/data/history_models.dart';
-import 'package:avanti/features/history/data/history_repo.dart';
-
-//Pagos
-import 'package:avanti/features/payments/data/payment_models.dart';
-import 'package:avanti/features/payments/data/payment_repo.dart';
-
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 // OJO: mantenemos Supabase aquí SOLO para userStatsProvider.
 // Si luego quieres separación 100% FE/BE, movemos esto a un UserStatsRepo en features/user/data/.
 import 'package:supabase_flutter/supabase_flutter.dart';
