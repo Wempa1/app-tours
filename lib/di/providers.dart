@@ -1,11 +1,22 @@
+// lib/di/providers.dart
 // Repos y providers compartidos para la UI (Riverpod)
 
+// Auth (repos separados FE/BE)
+import 'package:avanti/features/auth/data/auth_repo.dart';
+// Historial
+import 'package:avanti/features/history/data/history_models.dart';
+import 'package:avanti/features/history/data/history_repo.dart';
+//Pagos
+import 'package:avanti/features/payments/data/payment_models.dart';
+import 'package:avanti/features/payments/data/payment_repo.dart';
+// Tours (repos y modelos)
 import 'package:avanti/features/tours/data/caching_tour_repo.dart';
 import 'package:avanti/features/tours/data/models.dart';
 import 'package:avanti/features/tours/data/progress_repo.dart';
 import 'package:avanti/features/tours/data/tour_repo.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
+// OJO: mantenemos Supabase aquí SOLO para userStatsProvider.
+// Si luego quieres separación 100% FE/BE, movemos esto a un UserStatsRepo en features/user/data/.
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ---------------- Repos (BE detrás de interfaces) ----------------
@@ -16,6 +27,16 @@ final tourRepoProvider = Provider<TourRepo>(
 
 final progressRepoProvider = Provider<ProgressRepo>(
   (ref) => SupabaseProgressRepo(),
+);
+
+// Auth repo (frontera FE/BE)
+final authRepoProvider = Provider<AuthRepo>(
+  (ref) => SupabaseAuthRepo(),
+);
+
+// Historial repo
+final historyRepoProvider = Provider<HistoryRepo>(
+  (ref) => SupabaseHistoryRepo(),
 );
 
 // ---------------- Catálogo ----------------
@@ -52,7 +73,7 @@ final signedAudioUrlProvider =
 
 // ---------------- User Stats (view user_stats_v) ----------------
 // Nota: Esto toca Supabase directamente.
-// Para separación estricta FE/BE, podemos crear un UserStatsRepo.
+// Para separación 100% FE/BE, crear un UserStatsRepo y mover la lógica allí.
 
 typedef UserStats = ({
   int completedTours,
@@ -65,7 +86,6 @@ final userStatsProvider = FutureProvider.autoDispose<UserStats>((ref) async {
   final userId = client.auth.currentUser?.id;
   if (userId == null) {
     return (completedTours: 0, rewardStars0to9: 0, walkedKm: 0.0);
-    // Usuario no autenticado -> stats en cero
   }
 
   try {
@@ -89,17 +109,48 @@ final userStatsProvider = FutureProvider.autoDispose<UserStats>((ref) async {
     return (completedTours: 0, rewardStars0to9: 0, walkedKm: 0.0);
   }
 });
-// === Auth providers (frontera FE/BE) =========================
 
+// ---------------- Auth (expuesto a la UI vía repo) ----------------
 
-/// Email del usuario autenticado (o null)
-final currentUserEmailProvider = Provider<String?>((ref) {
-  return Supabase.instance.client.auth.currentUser?.email;
+/// Email del usuario autenticado (o null) como FutureProvider,
+/// para que la UI pueda usar `.when(...)`.
+final currentUserEmailProvider =
+    FutureProvider.autoDispose<String?>((ref) async {
+  final repo = ref.watch(authRepoProvider);
+  return repo.currentEmail();
 });
 
-/// Acción de sign out expuesta como función
-final signOutProvider = Provider<Future<void> Function()>((ref) {
-  return () async {
-    await Supabase.instance.client.auth.signOut();
-  };
+/// Acción de sign out como FutureProvider: en UI se usa `ref.read(signOutProvider.future)`.
+final signOutProvider = FutureProvider.autoDispose<void>((ref) async {
+  final repo = ref.watch(authRepoProvider);
+  await repo.signOut();
 });
+
+/// Enviar correo de restablecimiento de contraseña.
+/// Si pasas `null`, usa el email del usuario actual.
+final passwordResetProvider =
+    FutureProvider.autoDispose.family<void, String?>((ref, email) async {
+  final repo = ref.watch(authRepoProvider);
+  await repo.sendPasswordResetEmail(email: email);
+});
+
+// ================== Historial de Tours ========================
+
+final tourHistoryProvider =
+    FutureProvider.autoDispose<List<TourHistoryEntry>>((ref) async {
+  final repo = ref.watch(historyRepoProvider);
+  return repo.listUserHistory(limit: 200);
+});
+
+// ================== Payments ===============================
+final paymentRepoProvider = Provider<PaymentRepo>(
+  (ref) => SupabasePaymentRepo(),
+);
+
+final paymentMethodsProvider =
+    FutureProvider.autoDispose<List<PaymentMethod>>((ref) async {
+  final repo = ref.watch(paymentRepoProvider);
+  return repo.list();
+});
+
+

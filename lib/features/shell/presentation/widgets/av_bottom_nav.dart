@@ -1,10 +1,9 @@
 // lib/features/shell/presentation/widgets/av_bottom_nav.dart
-import 'package:flutter/material.dart';
-
 import 'package:avanti/features/home/presentation/widgets/home_screen.dart';
-import 'package:avanti/features/tours/presentation/catalog_screen.dart';
 import 'package:avanti/features/map/presentation/map_screen.dart';
 import 'package:avanti/features/settings/presentation/settings_screen.dart';
+import 'package:avanti/features/tours/presentation/catalog_screen.dart';
+import 'package:flutter/material.dart';
 
 class AvBottomNav extends StatefulWidget {
   /// Permite abrir el shell directamente en una pestaña concreta

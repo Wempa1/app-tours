@@ -1,6 +1,5 @@
 // lib/core/logging/app_logger.dart
 import 'dart:developer' as dev;
-import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/foundation.dart';
 
 typedef LogReporter = void Function(
